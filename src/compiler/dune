@@ -1,0 +1,13 @@
+(executable
+        (name oblivio)
+        (libraries stdio cmdliner common lexer parser interpreter)
+        )
+
+
+
+(install 
+    (section bin)
+    
+    (files (oblivio.exe as oblivio)
+           ))
+

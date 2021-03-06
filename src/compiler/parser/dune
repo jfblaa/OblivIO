@@ -1,0 +1,10 @@
+(library
+        (name parser)
+        (libraries common)
+        )
+
+(menhir
+  (merge_into parser)
+  (modules parser)
+  (flags --explain)
+)

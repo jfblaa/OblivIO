@@ -1,0 +1,11 @@
+{Bob}
+
+x := 42<15>@{Alice};
+
+obliv hn ({Alice},"PONG",v<m>) {
+  send({Alice},"PING",v+1);
+}
+
+obliv hn ({},"START",v<m>) {
+  send({Alice},"PING",x);
+}
