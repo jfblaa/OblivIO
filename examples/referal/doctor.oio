@@ -1,0 +1,9 @@
+{Doctor}
+
+declare patient_id := 123<15>@{Clinic};
+
+hn ({Patient},"RESULT",result<m>) {
+  obliv if result > 50
+  then send({Clinic},"REFER",patient_id);
+  else skip;
+}

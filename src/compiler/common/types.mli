@@ -1,15 +1,15 @@
 
 module L = Level
 
-type base = 
+type basetype = 
   | INT
-  | STRING of L.level
+  | STRING
   | ERROR
 
-type ty = Type of {base: base; level: L.level}
+type ty = Type of {base: basetype; level: L.level}
 
-val base: ty -> base
+val base: ty -> basetype
 val level: ty -> L.level
 
 val to_string: ty -> string
-val base_to_string: base -> string
+val base_to_string: basetype -> string

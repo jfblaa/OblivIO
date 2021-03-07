@@ -1,11 +1,8 @@
 {Bob}
 
-x := 42<15>@{Alice};
+declare x := 42<15>@{Alice};
+init send({Alice},"PING",x);
 
-obliv hn ({Alice},"PONG",v<m>) {
+hn ({Alice},"PONG",v<m>) {
   send({Alice},"PING",v+1);
-}
-
-obliv hn ({},"START",v<m>) {
-  send({Alice},"PING",x);
 }

@@ -1,19 +1,19 @@
 
 module L = Level
 
-type base = 
+type basetype = 
   | INT
-  | STRING of L.level
+  | STRING
   | ERROR
 
-type ty = Type of {base: base; level: L.level}
+type ty = Type of {base: basetype; level: L.level}
 
 let base (Type{base;_}) = base
 let level (Type{level;_}) = level
 
 let base_to_string = function
   | INT -> "int"
-  | STRING lvl -> "string" ^ L.to_string lvl
+  | STRING -> "string"
   | ERROR -> "error"
 
 let to_string (Type{base;level}) =

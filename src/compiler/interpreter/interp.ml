@@ -3,27 +3,30 @@ open Common
 module A = Absyn
 module O = Oper
 module L = Level
-module M = Strmap
 module V = Value
-module N = Network
+module M = Message
 
-type handler_map = (L.level * A.cmd) M.strmap
+type handler_info = {cmd:A.cmd; x_var:A.var; s_var: A.var}
+type node_state = ConsumerState | ProducerState of A.cmd
 
-(* TODO: Rethink this! Need to bind msg variable in producer state only! *)
-type _config
-  = { handlers: handler_map
-    ; active_hn: (A.cmd * (V.value M.strmap)) option
-    ; mem: V.value M.strmap
-    ; msg_queue: N.message list
+type prog_config
+  = { level: L.level
+    ; handlers: ((L.level * string) * handler_info) list
+    ; mutable hl_vars: (A.var * A.var) option
+    ; mutable state: node_state
+    ; mutable mem: (A.var * V.value) list
+    ; mutable msg_queue: M.message list
     }
 
-type sys_config
-  = { nodes: prog_config list
-    ; mutable trace: N.message list
-    }
+type sys_config = (L.level * prog_config) list
 
 exception InterpFatal
 exception NotImplemented of string
+
+let lookup m x =
+  match List.assoc_opt x m with
+  | Some v -> v
+  | None -> raise InterpFatal
 
 let op oper (v1,s1) (v2,s2) =
   match oper,v1,v2 with
@@ -48,16 +51,12 @@ let op oper (v1,s1) (v2,s2) =
   | O.MinusOp,V.IntVal a,V.IntVal b ->
     V.IntVal(a-b), max s1 s2
   | O.EqOp,V.StringVal a,V.StringVal b ->
-    V.IntVal(if String.equal a b then 1 else 0), max s1 s2
+    V.IntVal(if String.equal a b then 1 else 0), 1
   | O.NeqOp,V.StringVal a,V.StringVal b ->
-    IntVal(if String.equal a b then 0 else 1), max s1 s2
+    IntVal(if String.equal a b then 0 else 1), 1
   | O.ConcatOp,V.StringVal a,V.StringVal b ->
     V.StringVal(a^b), s1+s2
   | _ -> raise InterpFatal
-let (^?) mem x =
-  match M.look(mem,x) with
-  | Some v -> v
-  | None -> raise InterpFatal
 
 let _int v =
   match v with
@@ -74,24 +73,164 @@ let eval {mem;_} =
     match exp_base with
     | A.IntExp i -> (V.IntVal i, 8)
     | A.StringExp s -> (V.StringVal s, 8 * String.length s)
-    | A.VarExp x -> mem ^? x
+    | A.VarExp x -> lookup mem x
     | A.OpExp {left;oper;right} ->
       let lval = _E left in
       let rval = _E right in
       op oper lval rval
   in _E
 
-let producer_step (ctxt: prog_config) cmd  =
-  let rec _P (A.Cmd{cmd_base;pos}) =
+let producer_step (ctxt: prog_config) cmd =
+  let doneby msg =
+    ctxt.state <- ConsumerState;
+    msg in
+  let continue cmd msg =
+    ctxt.state <- ProducerState cmd;
+    msg in
+  let rec _P mimic (A.Cmd{cmd_base;pos}) =
+  let (~>) cmd_base = A.Cmd{cmd_base;pos} in
   match cmd_base with
-  | _ -> raise @@ NotImplemented ""
-  in _P cmd
+  | AssignCmd {var;exp} when mimic ->
+    let v1,s1 = lookup ctxt.mem var in
+    let _,s2 = eval ctxt exp in
+    ctxt.mem <- (var,(v1,max s1 s2))::ctxt.mem;
+    doneby []
+  | AssignCmd {var;exp} ->
+    let _,s1 = lookup ctxt.mem var in
+    let v2,s2 = eval ctxt exp in
+    ctxt.mem <- (var,(v2,max s1 s2))::ctxt.mem;
+    doneby []
+  | SeqCmd {c1;c2} ->
+    let msg = _P mimic c1 in
+    begin
+    match ctxt.state with
+    | ConsumerState ->
+      continue c2 msg
+    | ProducerState c1' ->
+      continue (~> (A.SeqCmd{c1=c1';c2})) msg
+    end
+  | SkipCmd ->
+    doneby []
+  | IfCmd {test;thn;els} ->
+    begin match eval ctxt test with
+    | V.IntVal 0, _ -> continue els []
+    | _ -> continue thn []
+    end
+  | OblivIfCmd {thn;els;_} when mimic ->
+    (* If Mimic, Obliv-if must mimic both branches as variable need not be defined *)
+    continue (~> (A.SeqCmd{c1 = ~>(A.MimicCmd thn); c2 = ~>(A.MimicCmd els)})) []
+  | OblivIfCmd {test;thn;els} ->
+    begin match eval ctxt test with
+    | V.IntVal 0, _ ->
+      continue (~> (A.SeqCmd{c1 = ~>(A.MimicCmd thn); c2 = els})) []
+    | _ ->
+      continue (~> (A.SeqCmd{c1 = thn; c2 = ~>(A.MimicCmd els)})) []
+    end
+  | WhileCmd {test;body} ->
+    let skipcmd = ~>(A.SkipCmd) in
+    let thn = ~>(A.SeqCmd{c1=body;c2=cmd}) in
+    continue (~> (A.IfCmd{test;thn;els=skipcmd})) []
+  | SendCmd {level;header;exp} ->
+    let (b,m) = eval ctxt exp in
+    let basety = match b with
+      | IntVal _ -> Types.INT
+      | StringVal _ -> Types.STRING in
+    let packet = if mimic then M.Dummy (basety,m) else M.Real (basety,(b,m)) in
+    doneby
+    [ M.Msg
+      { sender = ctxt.level
+      ; recipient = level
+      ; header
+      ; packet
+      } ]
+  | MimicCmd cmd' ->
+    let msg = _P true cmd' in
+    begin
+    match ctxt.state with
+    | ConsumerState ->
+      doneby msg
+    | ProducerState c ->
+      continue (~> (A.MimicCmd c)) msg
+    end
+  in _P false cmd
 
+let consumer_step (({handlers;msg_queue;_} as ctxt): prog_config) =
+  match msg_queue with
+  | [] -> ConsumerState
+  | M.Msg{sender;header;packet;_}::qs ->
+    ctxt.msg_queue <- qs;
+    let {cmd=A.Cmd{pos;_} as cmd;x_var;s_var} = lookup handlers (sender,header) in
 
-let consumer_step (ctxt: prog_config) =
-  raise @@ NotImplemented ""
+    let v,cmd =
+      match packet with
+      | Real (_,v) ->
+        v, cmd
+      | Dummy (Types.INT,m) ->
+        (V.default_base_int, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
+      | Dummy (Types.STRING,m) ->
+        (V.default_base_string, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
+      | Dummy (Types.ERROR,_) -> raise InterpFatal in
 
-let step ({cmd_opt;_} as ctxt: prog_config) =
-  match cmd_opt with
-  | Some cmd -> producer_step ctxt cmd
-  | None -> consumer_step ctxt 
+    let sval_base = V.IntVal (snd v) in
+
+    let s_val = (sval_base, V.size_of_base sval_base) in
+    ctxt.mem <- (s_var,s_val)::(x_var,v)::ctxt.mem;
+    ctxt.hl_vars <- Some (x_var,s_var);
+    ProducerState cmd
+
+let step_node (ctxt: prog_config) =
+  match ctxt.state with
+  | ConsumerState -> 
+    ctxt.state <- consumer_step ctxt;
+    []
+  | ProducerState cmd ->
+    let out_msg = producer_step ctxt cmd in
+    match ctxt.state with
+    | ConsumerState ->
+      begin match ctxt.hl_vars with
+      | Some (x_var,s_var) ->
+        ctxt.mem <- List.remove_assoc s_var ctxt.mem;
+        ctxt.mem <- List.remove_assoc x_var ctxt.mem
+      | None -> ()
+      end;
+      out_msg
+    | _ -> out_msg
+
+let rec step_sys time nodes =
+  let f acc (_,node) = 
+    step_node node @ acc in
+  let round_msgs = List.fold_left f [] nodes in
+  let g (M.Msg{recipient;_} as msg) =
+    let node = lookup nodes recipient in
+    print_int time;
+    print_string ": ";
+    print_endline @@ M.to_string_at_level msg L.bottom; (* debug printing to bot! *)
+    (*print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic"]); (* debug printing to bot! *)*)
+    node.msg_queue <- node.msg_queue @ [msg] in
+  List.iter g round_msgs;
+  let h (_,node) =
+    match node.state, List.length node.msg_queue with
+    | ConsumerState, 0 -> false
+    | _ -> true in
+  if List.exists h nodes
+  then step_sys (time + 1) nodes
+
+let interp (progs: A.program list) =
+  let setup (A.Prog{level;vardecls;init;hns}) =
+    let f acc (A.Hn{level;header;svar=(x_var,s_var);cmd;_}) =
+      let hn_info = {cmd;x_var;s_var} in
+      ((level,header),hn_info) :: acc in
+    let g acc (A.VarDecl{var;value;_}) =
+      (var,value)::acc in
+    let state =
+      match init with
+      | Some cmd -> ProducerState cmd
+      | None -> ConsumerState in
+    level, { level
+    ; handlers = List.fold_left f [] hns
+    ; hl_vars = None
+    ; state
+    ; mem = List.fold_left g [] vardecls
+    ; msg_queue = []
+    } in
+  step_sys 0 @@ List.map setup progs

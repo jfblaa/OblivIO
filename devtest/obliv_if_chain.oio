@@ -1,0 +1,18 @@
+{}
+
+declare x := 0<8>@{};
+
+init {
+    obliv if 0
+    then send({},"SET",42);
+    else skip;
+}
+
+hn ({},"SET",v<m>) {
+    x := v;
+    send({},"CHECK",x);
+}
+
+hn ({},"CHECK",v<m>) {
+    skip;
+}

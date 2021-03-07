@@ -30,8 +30,9 @@ let parse file =
   in 
   close_in input;
   parseRes
-  
 
+let interp files =
+  Interpreter.Interp.interp files
   
 let withFlags {files} =
   let exitCode = ref 0 in
@@ -39,7 +40,7 @@ let withFlags {files} =
   begin 
     try
         List.map parse files
-        |> fun _ -> ()
+        |> interp
     with
       CompileError -> (exitCode := 1)
   end;

@@ -1,5 +1,5 @@
 {Alice}
 
-obliv hn ({Bob},"PING",v<m>) {
+hn ({Bob},"PING",v<m>) {
   send({Bob},"PONG",v+1);
 }

@@ -12,13 +12,14 @@
 
 %token EOF
 %token <string> ID
-%token <int> INT 
-%token <string> STRING 
+%token <int> INT
+%token <string> STRING
+%token DECLARE INIT
 %token COMMA SEMICOLON
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS EQ NEQ LT LE GT GE CARET
 %token AND OR ASSIGN IF THEN ELSE WHILE DO
-%token SKIP SLEEP HN OBLIV SEND AT
+%token SKIP HN OBLIV SEND AT
 
 %left OR
 %left AND
@@ -84,15 +85,13 @@ cmd_base_seq:
 cmd_base:
 | v=var ASSIGN e=exp SEMICOLON
   { AssignCmd{var=v; exp=e} }
-| SLEEP e=paren(exp) SEMICOLON
-  { SleepCmd e }
 | SKIP SEMICOLON
   { SkipCmd }
-| IF test=paren(exp) THEN thn=brace(cmd) ELSE els=brace(cmd)
+| IF test=exp THEN thn=cmd ELSE els=cmd
   { IfCmd{test; thn; els} }
-| OBLIV IF test=paren(exp) THEN thn=brace(cmd) ELSE els=brace(cmd)
-  { MimicCmd (Cmd{cmd_base=IfCmd{test; thn; els};pos=$startpos}) }
-| WHILE test=paren(exp) DO body=brace(cmd)
+| OBLIV IF test=exp THEN thn=cmd ELSE els=cmd
+  { OblivIfCmd{test; thn; els} }
+| WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
 | SEND LPAREN level=lvl COMMA header=STRING COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{level;header;exp} }
@@ -116,16 +115,17 @@ basevalue:
   { StringVal s }
 
 vardecl:
-| var=var ASSIGN base=basevalue size=angled(INT) AT level=lvl SEMICOLON
+| DECLARE var=var ASSIGN base=basevalue size=angled(INT) AT level=lvl SEMICOLON
   { VarDecl {var; value=(base,size); level; pos=$startpos} }
 
 hn:
 | HN LPAREN level=lvl COMMA header=STRING COMMA svar=pair(var,angled(var)) RPAREN cmd=cmd
   { Hn {level;header;svar;cmd;pos=$startpos} }
-| OBLIV HN LPAREN level=lvl COMMA header=STRING COMMA svar=pair(var,angled(var)) RPAREN cmd=cmd
-  { OblivHn {level;header;svar;cmd;pos=$startpos} }
+
+init:
+| INIT c=cmd { c }
 
 (* Top-level *)
 program:
-| level=lvl vardecls=vardecl* hns=hn* EOF
-  { Prog {level;vardecls;hns} }
+| level=lvl vardecls=vardecl* init=init? hns=hn* EOF
+  { Prog {level;vardecls;init;hns} }

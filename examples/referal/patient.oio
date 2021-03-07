@@ -1,0 +1,10 @@
+{Patient}
+
+declare result := 100<15>@{Alice};
+declare appointment := 0<15>@{Clinic};
+
+init send({Doctor},"RESULT",result);
+
+hn ({Clinic},"APPOINTMENT",time<m>) {
+  appointment := time;
+}

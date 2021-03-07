@@ -38,6 +38,8 @@ rule token = parse
 | "||"                { OR }
 | '@'                 { AT }
 | ":="                { ASSIGN }
+| "declare"           { DECLARE }
+| "init"              { INIT }
 | "if"                { IF }
 | "obliv"             { OBLIV }
 | "then"              { THEN }
@@ -46,7 +48,6 @@ rule token = parse
 | "while"             { WHILE }
 | "do"                { DO }
 | "skip"              { SKIP }
-| "sleep"             { SLEEP }
 | "hn"                { HN }
 | "/*"                { comment 0 lexbuf }
 | digit+ as i         { match int_of_string_opt i with
