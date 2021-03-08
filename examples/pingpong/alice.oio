@@ -1,7 +1,9 @@
 {Alice}
 
-declare x := 0<8>@{Bob};
+declare x := 0<m>@{Bob};
 init send({Bob},"PING",x);
+
+
 
 hn ({Bob},"PONG",v<m>) {
   send({Bob},"PING",v+1);

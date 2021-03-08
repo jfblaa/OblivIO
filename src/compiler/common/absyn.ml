@@ -1,11 +1,11 @@
 type pos = Lexing.position 
 type level = Level.level
-type value = Value.value
+type basevalue = Value.basevalue
 include Oper
 
 type program = Prog of { level: level; vardecls: vardecl list; init: cmd option; hns: hn list }
 and vardecl
-  = VarDecl of { var: var; value: value; level: level; pos: pos }
+  = VarDecl of { var: var; basevalue: basevalue; svar: var; level: level; pos: pos }
 and hn
   = Hn of { level: level; header: string; svar: var * var; cmd: cmd; pos: pos }
 and var = string

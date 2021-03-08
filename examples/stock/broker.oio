@@ -1,10 +1,12 @@
 {Broker}
 
-declare price_abc := 42<8>@{};
-declare price_xyz := 84<8>@{};
+declare price_abc := 42<m>@{};
+declare price_xyz := 84<m>@{};
 
-declare portfolio_abc := 10<8>@{Customer};
-declare portfolio_xyz := 20<8>@{Customer};
+declare portfolio_abc := 10<m>@{Customer};
+declare portfolio_xyz := 20<m>@{Customer};
+
+
 
 hn ({Customer},"PRICE",stock<m>) {
     obliv if (stock = "ABC") then {

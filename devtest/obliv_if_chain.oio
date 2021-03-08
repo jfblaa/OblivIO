@@ -1,6 +1,6 @@
 {}
 
-declare x := 0<8>@{};
+declare x := 0<m>@{};
 
 init {
     obliv if 0

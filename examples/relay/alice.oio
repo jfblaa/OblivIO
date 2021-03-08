@@ -1,8 +1,16 @@
 {Alice}
 
-declare target := "bob"<80>@{Relay};
+declare target := ""<m>@{Relay};
 
-init send({Relay},"RELAY",target);
+init {
+  obliv if 0
+  then target := "bob";
+  else target := "carol";
+
+  send({Relay},"RELAY",target);
+}
+
+
 
 hn ({Bob},"GREETING",x<m>) {
   print("Bob says",x);

@@ -1,9 +1,11 @@
 {Alice}
 
-declare salary_offer := 100<8>@{Bob};
-declare contract := "contract details"<256>@{Bob};
+declare salary_offer := 100<size_offer>@{Bob};
+declare contract := "contract details"<size_contract>@{Bob};
 
 init send({Bob},"OFFER",salary_offer);
+
+
 
 hn ({Bob},"ACCEPT",x<m>) {
   print("Bob accepted, sending contract!");

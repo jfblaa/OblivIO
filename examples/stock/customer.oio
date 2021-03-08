@@ -1,9 +1,11 @@
 {Customer}
 
-declare stock := "XYZ"<24>@{Broker};
-declare threshold := 50<8>@{Broker};
+declare stock := "XYZ"<m>@{Broker};
+declare threshold := 50<m>@{Broker};
 
 init send({Broker},"PRICE",stock);
+
+
 
 hn ({Broker},"PRICE_ABC",price<m>) {
     obliv if (price <= threshold) then {

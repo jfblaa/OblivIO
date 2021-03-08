@@ -1,7 +1,11 @@
 {Greeter}
 
+declare hello := "Hello"<hello_size>@{};
+
+
+
 hn ({Alice},"PING",x<m>) {
-  if m >= 40
+  if m >= hello_size
   then {
       obliv if x = "Hello"
       then send({Alice},"PONG",x ^ " World!");

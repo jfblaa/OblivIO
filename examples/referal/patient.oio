@@ -1,7 +1,9 @@
 {Patient}
 
-declare result := 100<15>@{Alice};
-declare appointment := 0<15>@{Clinic};
+declare result := 100<m>@{Alice};
+declare appointment := 0<m>@{Clinic};
+
+
 
 init send({Doctor},"RESULT",result);
 

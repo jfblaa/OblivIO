@@ -221,8 +221,11 @@ let interp (progs: A.program list) =
     let f acc (A.Hn{level;header;svar=(x_var,s_var);cmd;_}) =
       let hn_info = {cmd;x_var;s_var} in
       ((level,header),hn_info) :: acc in
-    let g acc (A.VarDecl{var;value;_}) =
-      (var,value)::acc in
+    let g acc (A.VarDecl{var;basevalue;svar;_}) =
+      let size = V.size_of_base basevalue in
+      let sizeval = V.IntVal size in
+      let sizesize = V.size_of_base sizeval in
+      (var,(basevalue,size))::(svar,(sizeval,sizesize))::acc in
     let state =
       match init with
       | Some cmd -> ProducerState cmd

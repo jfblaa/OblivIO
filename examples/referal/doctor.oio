@@ -1,6 +1,8 @@
 {Doctor}
 
-declare patient_id := 123<15>@{Clinic};
+declare patient_id := 123<m>@{Clinic};
+
+
 
 hn ({Patient},"RESULT",result<m>) {
   obliv if result > 50

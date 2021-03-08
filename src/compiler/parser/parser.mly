@@ -117,8 +117,8 @@ basevalue:
   { StringVal s }
 
 vardecl:
-| DECLARE var=var ASSIGN base=basevalue size=angled(INT) AT level=lvl SEMICOLON
-  { VarDecl {var; value=(base,size); level; pos=$startpos} }
+| DECLARE var=var ASSIGN basevalue=basevalue svar=angled(ID) AT level=lvl SEMICOLON
+  { VarDecl {var; basevalue; svar; level; pos=$startpos} }
 
 hn:
 | HN LPAREN level=lvl COMMA header=STRING COMMA svar=pair(var,angled(var)) RPAREN cmd=cmd
