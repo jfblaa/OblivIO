@@ -40,8 +40,9 @@ rule token = parse
 | ":="                { ASSIGN }
 | "declare"           { DECLARE }
 | "init"              { INIT }
-| "if"                { IF }
 | "obliv"             { OBLIV }
+| "print"             { PRINT }
+| "if"                { IF }
 | "then"              { THEN }
 | "else"              { ELSE }
 | "send"              { SEND }

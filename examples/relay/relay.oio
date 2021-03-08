@@ -1,0 +1,9 @@
+{Relay}
+
+hn ({Alice},"RELAY",x<m>) {
+  obliv if x = "bob"
+  then send({Bob},"ALICE","poke");
+  else obliv if x = "carol"
+  then send({Carol},"ALICE","poke");
+  else skip;
+}

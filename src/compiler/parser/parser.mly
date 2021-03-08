@@ -19,7 +19,7 @@
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS EQ NEQ LT LE GT GE CARET
 %token AND OR ASSIGN IF THEN ELSE WHILE DO
-%token SKIP HN OBLIV SEND AT
+%token SKIP HN OBLIV SEND AT PRINT
 
 %left OR
 %left AND
@@ -95,6 +95,8 @@ cmd_base:
   { WhileCmd{test; body} }
 | SEND LPAREN level=lvl COMMA header=STRING COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{level;header;exp} }
+| PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
+  { PrintCmd{info;exp} }
 
 cmd_seq:
 | c=cmd_base_seq

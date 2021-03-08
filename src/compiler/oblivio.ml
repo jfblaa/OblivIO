@@ -60,8 +60,8 @@ let main_t =
   Term.(const check $ src_arg)
 
 let info =
-  let doc = "OblivIO compiler." in
-  Term.info "oblivioc" ~version:"v0.1" ~doc ~exits:Term.default_exits
+  let doc = "OblivIO interpreter." in
+  Term.info "oblivio" ~version:"v0.1" ~doc ~exits:Term.default_exits
 
 let _ = 
   Term.exit @@ Term.eval (main_t,info)

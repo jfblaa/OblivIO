@@ -1,0 +1,13 @@
+{Alice}
+
+declare target := "bob"<24>@{Relay};
+
+init send({Relay},"RELAY",target);
+
+hn ({Bob},"GREETING",x<m>) {
+  print("Bob says",x);
+}
+
+hn ({Carol},"GREETING",x<m>) {
+  print("Carol says",x);
+}

@@ -90,15 +90,11 @@ let producer_step (ctxt: prog_config) cmd =
   let rec _P mimic (A.Cmd{cmd_base;pos}) =
   let (~>) cmd_base = A.Cmd{cmd_base;pos} in
   match cmd_base with
-  | AssignCmd {var;exp} when mimic ->
-    let v1,s1 = lookup ctxt.mem var in
-    let _,s2 = eval ctxt exp in
-    ctxt.mem <- (var,(v1,max s1 s2))::ctxt.mem;
-    doneby []
   | AssignCmd {var;exp} ->
-    let _,s1 = lookup ctxt.mem var in
+    let v1,s1 = lookup ctxt.mem var in
     let v2,s2 = eval ctxt exp in
-    ctxt.mem <- (var,(v2,max s1 s2))::ctxt.mem;
+    let v = if mimic then v1 else v2 in
+    ctxt.mem <- (var,(v,max s1 s2))::ctxt.mem;
     doneby []
   | SeqCmd {c1;c2} ->
     let msg = _P mimic c1 in
@@ -116,9 +112,6 @@ let producer_step (ctxt: prog_config) cmd =
     | V.IntVal 0, _ -> continue els []
     | _ -> continue thn []
     end
-  | OblivIfCmd {thn;els;_} when mimic ->
-    (* If Mimic, Obliv-if must mimic both branches as variable need not be defined *)
-    continue (~> (A.SeqCmd{c1 = ~>(A.MimicCmd thn); c2 = ~>(A.MimicCmd els)})) []
   | OblivIfCmd {test;thn;els} ->
     begin match eval ctxt test with
     | V.IntVal 0, _ ->
@@ -143,6 +136,14 @@ let producer_step (ctxt: prog_config) cmd =
       ; header
       ; packet
       } ]
+  | PrintCmd { info; exp } ->
+    let v = eval ctxt exp in
+    let intro =
+      match info with
+      | Some s -> s ^ ": "
+      | None -> "" in
+    if not mimic then print_endline @@ intro ^ V.to_string v;
+    doneby []
   | MimicCmd cmd' ->
     let msg = _P true cmd' in
     begin
@@ -204,8 +205,8 @@ let rec step_sys time nodes =
     let node = lookup nodes recipient in
     print_int time;
     print_string ": ";
-    print_endline @@ M.to_string_at_level msg L.bottom; (* debug printing to bot! *)
-    (*print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic"]); (* debug printing to bot! *)*)
+    (*print_endline @@ M.to_string_at_level msg L.bottom;*) (* debug printing to bot! *)
+    print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic";"Customer";"Broker";"Relay";"Alice"]); (* debug printing to bot! *)
     node.msg_queue <- node.msg_queue @ [msg] in
   List.iter g round_msgs;
   let h (_,node) =

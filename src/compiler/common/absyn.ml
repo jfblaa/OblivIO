@@ -24,4 +24,5 @@ and cmd_base
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }
   | SendCmd of { level: level; header: string; exp: exp }
+  | PrintCmd of { info: string option; exp: exp }
   | MimicCmd of cmd

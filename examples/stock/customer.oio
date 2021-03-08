@@ -1,0 +1,22 @@
+{Customer}
+
+declare stock := "XYZ"<24>@{Broker};
+declare threshold := 50<8>@{Broker};
+
+init send({Broker},"PRICE",stock);
+
+hn ({Broker},"PRICE_ABC",price<m>) {
+    obliv if (price <= threshold) then {
+        send({Broker},"BUY_ABC",10);
+    } else {
+        send({Broker},"SELL_ABC",10);
+    }
+}
+
+hn ({Broker},"PRICE_XYZ",price<m>) {
+    obliv if (price <= threshold) then {
+        send({Broker},"BUY_XYZ",10);
+    } else {
+        send({Broker},"SELL_XYZ",10);
+    }
+}

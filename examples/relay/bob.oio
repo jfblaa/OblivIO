@@ -1,0 +1,5 @@
+{Bob}
+
+hn ({Relay},"ALICE",x<m>) {
+  send({Alice},"GREETING","Howdy!");
+}

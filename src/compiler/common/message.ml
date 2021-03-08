@@ -22,7 +22,7 @@ let to_string (Msg {sender; recipient; header; packet}) =
 
 let to_string_at_level (Msg {sender; recipient; header; packet;_} as msg) level =
   let ty,m = match packet with Real (ty,(_,m)) -> ty,m | Dummy (ty,m) -> ty,m in
-  if L.flows_to recipient level
+  if L.flows_to sender level || L.flows_to recipient level
   then to_string msg
   else String.concat ""
     [ L.to_string sender
