@@ -1,6 +1,6 @@
 {Alice}
 
-declare target := "bob"<24>@{Relay};
+declare target := "bob"<80>@{Relay};
 
 init send({Relay},"RELAY",target);
 

@@ -1,0 +1,12 @@
+{Greeter}
+
+hn ({Alice},"PING",x<m>) {
+  if m >= 40
+  then {
+      obliv if x = "Hello"
+      then send({Alice},"PONG",x ^ " World!");
+      else send({Alice},"PONG","Incorrect input received!");
+  } else {
+      send({Alice},"PONG","Incorrect input received!");
+  }
+}

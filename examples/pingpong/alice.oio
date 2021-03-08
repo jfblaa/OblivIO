@@ -1,5 +1,8 @@
 {Alice}
 
-hn ({Bob},"PING",v<m>) {
-  send({Bob},"PONG",v+1);
+declare x := 0<8>@{Bob};
+init send({Bob},"PING",x);
+
+hn ({Bob},"PONG",v<m>) {
+  send({Bob},"PING",v+1);
 }

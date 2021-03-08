@@ -1,0 +1,7 @@
+{Alice}
+
+init send({Greeter},"PING","Hello");
+
+hn ({Greeter},"PONG",x<m>) {
+  print("Reply from greeter",x);
+}

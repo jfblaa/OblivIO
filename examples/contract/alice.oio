@@ -1,0 +1,15 @@
+{Alice}
+
+declare salary_offer := 100<8>@{Bob};
+declare contract := "contract details"<256>@{Bob};
+
+init send({Bob},"OFFER",salary_offer);
+
+hn ({Bob},"ACCEPT",x<m>) {
+  print("Bob accepted, sending contract!");
+  send({Bob},"CONTRACT",contract);
+}
+
+hn ({Bob},"DECLINE",x<m>) {
+  print("Bob declined!");
+}

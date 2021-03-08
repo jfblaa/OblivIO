@@ -205,8 +205,8 @@ let rec step_sys time nodes =
     let node = lookup nodes recipient in
     print_int time;
     print_string ": ";
-    (*print_endline @@ M.to_string_at_level msg L.bottom;*) (* debug printing to bot! *)
-    print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic";"Customer";"Broker";"Relay";"Alice"]); (* debug printing to bot! *)
+    print_endline @@ M.to_string_at_level msg L.bottom; (* debug printing to bot! *)
+    (*print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic";"Customer";"Broker";"Relay";"Alice"]); (* debug printing to bot! *)*)
     node.msg_queue <- node.msg_queue @ [msg] in
   List.iter g round_msgs;
   let h (_,node) =

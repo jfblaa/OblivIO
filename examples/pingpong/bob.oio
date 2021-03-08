@@ -1,8 +1,5 @@
 {Bob}
 
-declare x := 42<15>@{Alice};
-init send({Alice},"PING",x);
-
-hn ({Alice},"PONG",v<m>) {
-  send({Alice},"PING",v+1);
+hn ({Alice},"PING",v<m>) {
+  send({Alice},"PONG",v+1);
 }
