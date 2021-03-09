@@ -7,7 +7,7 @@ type program = Prog of { level: level; vardecls: vardecl list; init: cmd option;
 and vardecl
   = VarDecl of { var: var; basevalue: basevalue; svar: var; level: level; pos: pos }
 and hn
-  = Hn of { level: level; header: string; svar: var * var; cmd: cmd; pos: pos }
+  = Hn of { level: level; tag: string; svar: var * var; cmd: cmd; pos: pos }
 and var = string
 and exp = Exp of { exp_base: exp_base; pos: pos }
 and exp_base
@@ -23,6 +23,6 @@ and cmd_base
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }
-  | SendCmd of { level: level; header: string; exp: exp }
+  | SendCmd of { level: level; tag: string; exp: exp }
   | PrintCmd of { info: string option; exp: exp }
   | MimicCmd of cmd

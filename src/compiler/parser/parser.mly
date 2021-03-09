@@ -93,8 +93,8 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
-| SEND LPAREN level=lvl COMMA header=STRING COMMA exp=exp RPAREN SEMICOLON
-  { SendCmd{level;header;exp} }
+| SEND LPAREN level=lvl COMMA tag=STRING COMMA exp=exp RPAREN SEMICOLON
+  { SendCmd{level;tag;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
 
@@ -121,8 +121,8 @@ vardecl:
   { VarDecl {var; basevalue; svar; level; pos=$startpos} }
 
 hn:
-| HN LPAREN level=lvl COMMA header=STRING COMMA svar=pair(var,angled(var)) RPAREN cmd=cmd
-  { Hn {level;header;svar;cmd;pos=$startpos} }
+| HN LPAREN level=lvl COMMA tag=STRING COMMA svar=pair(var,angled(var)) RPAREN cmd=cmd
+  { Hn {level;tag;svar;cmd;pos=$startpos} }
 
 init:
 | INIT c=cmd { c }

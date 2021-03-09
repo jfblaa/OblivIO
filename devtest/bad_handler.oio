@@ -1,0 +1,3 @@
+{Alice}
+
+init send({Alice},"HELLO",0);

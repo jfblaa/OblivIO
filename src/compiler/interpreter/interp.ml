@@ -123,7 +123,7 @@ let producer_step (ctxt: prog_config) cmd =
     let skipcmd = ~>(A.SkipCmd) in
     let thn = ~>(A.SeqCmd{c1=body;c2=cmd}) in
     continue (~> (A.IfCmd{test;thn;els=skipcmd})) []
-  | SendCmd {level;header;exp} ->
+  | SendCmd {level;tag;exp} ->
     let (b,m) = eval ctxt exp in
     let basety = match b with
       | IntVal _ -> Types.INT
@@ -133,7 +133,7 @@ let producer_step (ctxt: prog_config) cmd =
     [ M.Msg
       { sender = ctxt.level
       ; recipient = level
-      ; header
+      ; tag
       ; packet
       } ]
   | PrintCmd { info; exp } ->
@@ -158,26 +158,36 @@ let producer_step (ctxt: prog_config) cmd =
 let consumer_step (({handlers;msg_queue;_} as ctxt): prog_config) =
   match msg_queue with
   | [] -> ConsumerState
-  | M.Msg{sender;header;packet;_}::qs ->
+  | M.Msg{sender;tag;packet;_}::qs ->
     ctxt.msg_queue <- qs;
-    let {cmd=A.Cmd{pos;_} as cmd;x_var;s_var} = lookup handlers (sender,header) in
+    match List.assoc_opt (sender,tag) handlers with
+    | None ->
+      print_endline @@ String.concat " "
+      [ "WARNING: no handler associated with"
+      ; L.to_string ctxt.level
+      ; "accepts messages with tag"
+      ; tag
+      ; "from"
+      ; L.to_string sender
+      ];
+      ConsumerState
+    | Some {cmd=A.Cmd{pos;_} as cmd;x_var;s_var} ->
+      let v,cmd =
+        match packet with
+        | Real (_,v) ->
+          v, cmd
+        | Dummy (Types.INT,m) ->
+          (V.default_base_int, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
+        | Dummy (Types.STRING,m) ->
+          (V.default_base_string, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
+        | Dummy (Types.ERROR,_) -> raise InterpFatal in
 
-    let v,cmd =
-      match packet with
-      | Real (_,v) ->
-        v, cmd
-      | Dummy (Types.INT,m) ->
-        (V.default_base_int, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
-      | Dummy (Types.STRING,m) ->
-        (V.default_base_string, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
-      | Dummy (Types.ERROR,_) -> raise InterpFatal in
+      let sval_base = V.IntVal (snd v) in
 
-    let sval_base = V.IntVal (snd v) in
-
-    let s_val = (sval_base, V.size_of_base sval_base) in
-    ctxt.mem <- (s_var,s_val)::(x_var,v)::ctxt.mem;
-    ctxt.hl_vars <- Some (x_var,s_var);
-    ProducerState cmd
+      let s_val = (sval_base, V.size_of_base sval_base) in
+      ctxt.mem <- (s_var,s_val)::(x_var,v)::ctxt.mem;
+      ctxt.hl_vars <- Some (x_var,s_var);
+      ProducerState cmd
 
 let step_node (ctxt: prog_config) =
   match ctxt.state with
@@ -202,12 +212,19 @@ let rec step_sys time nodes =
     step_node node @ acc in
   let round_msgs = List.fold_left f [] nodes in
   let g (M.Msg{recipient;_} as msg) =
-    let node = lookup nodes recipient in
     print_int time;
     print_string ": ";
     print_endline @@ M.to_string_at_level msg L.bottom; (* debug printing to bot! *)
-    (*print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic";"Customer";"Broker";"Relay";"Alice"]); (* debug printing to bot! *)*)
-    node.msg_queue <- node.msg_queue @ [msg] in
+    (*print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic";"Customer";"Broker";"Relay";"Alice"]);*)
+    match List.assoc_opt recipient nodes with
+    | None ->
+      print_endline @@ String.concat " "
+      [ "WARNING: no recipient with name"
+      ; L.to_string recipient
+      ; "found"
+      ]
+    | Some node ->
+      node.msg_queue <- node.msg_queue @ [msg] in
   List.iter g round_msgs;
   let h (_,node) =
     match node.state, List.length node.msg_queue with
@@ -218,9 +235,9 @@ let rec step_sys time nodes =
 
 let interp (progs: A.program list) =
   let setup (A.Prog{level;vardecls;init;hns}) =
-    let f acc (A.Hn{level;header;svar=(x_var,s_var);cmd;_}) =
+    let f acc (A.Hn{level;tag;svar=(x_var,s_var);cmd;_}) =
       let hn_info = {cmd;x_var;s_var} in
-      ((level,header),hn_info) :: acc in
+      ((level,tag),hn_info) :: acc in
     let g acc (A.VarDecl{var;basevalue;svar;_}) =
       let size = V.size_of_base basevalue in
       let sizeval = V.IntVal size in
