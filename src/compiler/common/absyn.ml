@@ -25,4 +25,4 @@ and cmd_base
   | WhileCmd of { test: exp; body: cmd }
   | SendCmd of { level: level; tag: string; exp: exp }
   | PrintCmd of { info: string option; exp: exp }
-  | MimicCmd of cmd
+  | PhantomCmd of cmd

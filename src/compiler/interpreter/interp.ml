@@ -115,9 +115,9 @@ let producer_step (ctxt: prog_config) cmd =
   | OblivIfCmd {test;thn;els} ->
     begin match eval ctxt test with
     | V.IntVal 0, _ ->
-      continue (~> (A.SeqCmd{c1 = ~>(A.MimicCmd thn); c2 = els})) []
+      continue (~> (A.SeqCmd{c1 = ~>(A.PhantomCmd thn); c2 = els})) []
     | _ ->
-      continue (~> (A.SeqCmd{c1 = thn; c2 = ~>(A.MimicCmd els)})) []
+      continue (~> (A.SeqCmd{c1 = thn; c2 = ~>(A.PhantomCmd els)})) []
     end
   | WhileCmd {test;body} ->
     let skipcmd = ~>(A.SkipCmd) in
@@ -144,14 +144,14 @@ let producer_step (ctxt: prog_config) cmd =
       | None -> "" in
     if not mimic then print_endline @@ intro ^ V.to_string v;
     doneby []
-  | MimicCmd cmd' ->
+  | PhantomCmd cmd' ->
     let msg = _P true cmd' in
     begin
     match ctxt.state with
     | ConsumerState ->
       doneby msg
     | ProducerState c ->
-      continue (~> (A.MimicCmd c)) msg
+      continue (~> (A.PhantomCmd c)) msg
     end
   in _P false cmd
 
@@ -177,9 +177,9 @@ let consumer_step (({handlers;msg_queue;_} as ctxt): prog_config) =
         | Real (_,v) ->
           v, cmd
         | Dummy (Types.INT,m) ->
-          (V.default_base_int, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
+          (V.default_base_int, m), A.Cmd{cmd_base=A.PhantomCmd cmd;pos}
         | Dummy (Types.STRING,m) ->
-          (V.default_base_string, m), A.Cmd{cmd_base=A.MimicCmd cmd;pos}
+          (V.default_base_string, m), A.Cmd{cmd_base=A.PhantomCmd cmd;pos}
         | Dummy (Types.ERROR,_) -> raise InterpFatal in
 
       let sval_base = V.IntVal (snd v) in
