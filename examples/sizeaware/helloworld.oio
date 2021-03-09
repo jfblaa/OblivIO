@@ -1,10 +1,10 @@
 {Greeter}
 
-declare hello := "Hello"<hello_size>@{};
+declare string<hello_size> hello := "Hello"@{};
 
 
 
-hn ({Alice},"PING",x<m>) {
+hn ({Alice},"PING",string<m> x) {
   if m >= hello_size
   then {
       obliv if x = "Hello"

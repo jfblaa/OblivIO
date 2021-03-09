@@ -1,5 +1,5 @@
 {Bob}
 
-hn ({Relay},"ALICE",x<m>) {
+hn ({Relay},"ALICE",string<m> x) {
   send({Alice},"GREETING","Howdy!");
 }

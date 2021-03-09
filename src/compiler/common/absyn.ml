@@ -5,9 +5,9 @@ include Oper
 
 type program = Prog of { level: level; vardecls: vardecl list; init: cmd option; hns: hn list }
 and vardecl
-  = VarDecl of { var: var; basevalue: basevalue; svar: var; level: level; pos: pos }
+  = VarDecl of { sizevar: var; var: var; basevalue: basevalue; level: level; pos: pos }
 and hn
-  = Hn of { level: level; tag: string; svar: var * var; cmd: cmd; pos: pos }
+  = Hn of { level: level; tag: string; sizevar: var; var: var; cmd: cmd; pos: pos }
 and var = string
 and exp = Exp of { exp_base: exp_base; pos: pos }
 and exp_base

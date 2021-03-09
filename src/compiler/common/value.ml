@@ -6,7 +6,7 @@ type basevalue =
 type value = basevalue * int
 
 let size_of_base = function
-  | IntVal _ -> 8
+  | IntVal _ -> 64
   | StringVal s -> 8 * String.length s
 
 let default_base_int =

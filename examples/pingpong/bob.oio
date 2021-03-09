@@ -1,5 +1,5 @@
 {Bob}
 
-hn ({Alice},"PING",v<m>) {
+hn ({Alice},"PING",int<m> v) {
   send({Alice},"PONG",v+1);
 }

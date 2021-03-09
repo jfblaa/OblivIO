@@ -1,6 +1,6 @@
 {Relay}
 
-hn ({Alice},"RELAY",x<m>) {
+hn ({Alice},"RELAY",string<m> x) {
   obliv if x = "bob"
   then send({Bob},"ALICE","poke");
   else obliv if x = "carol"

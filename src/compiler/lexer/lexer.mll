@@ -50,6 +50,8 @@ rule token = parse
 | "do"                { DO }
 | "skip"              { SKIP }
 | "hn"                { HN }
+| "int"               { INTTYPE }
+| "string"            { STRINGTYPE }
 | "/*"                { comment 0 lexbuf }
 | digit+ as i         { match int_of_string_opt i with
                         | Some i' -> INT i'

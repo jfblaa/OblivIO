@@ -1,10 +1,10 @@
 {Alice}
 
-declare x := 0<m>@{Bob};
+declare int<m> x := 0@{Bob};
 init send({Bob},"PING",x);
 
 
 
-hn ({Bob},"PONG",v<m>) {
+hn ({Bob},"PONG",int<m> v) {
   send({Bob},"PING",v+1);
 }

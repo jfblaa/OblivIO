@@ -1,6 +1,6 @@
 {Alice}
 
-declare target := ""<m>@{Relay};
+declare string<m> target := ""@{Relay};
 
 init {
   obliv if 0
@@ -12,10 +12,10 @@ init {
 
 
 
-hn ({Bob},"GREETING",x<m>) {
+hn ({Bob},"GREETING",string<m> x) {
   print("Bob says",x);
 }
 
-hn ({Carol},"GREETING",x<m>) {
+hn ({Carol},"GREETING",string<m> x) {
   print("Carol says",x);
 }

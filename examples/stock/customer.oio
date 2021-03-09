@@ -1,13 +1,13 @@
 {Customer}
 
-declare stock := "XYZ"<m>@{Broker};
-declare threshold := 50<m>@{Broker};
+declare string<m> stock := "XYZ"@{Broker};
+declare int<m> threshold := 50@{Broker};
 
 init send({Broker},"PRICE",stock);
 
 
 
-hn ({Broker},"PRICE_ABC",price<m>) {
+hn ({Broker},"PRICE_ABC",int<m> price) {
     obliv if (price <= threshold) then {
         send({Broker},"BUY_ABC",10);
     } else {
@@ -15,7 +15,7 @@ hn ({Broker},"PRICE_ABC",price<m>) {
     }
 }
 
-hn ({Broker},"PRICE_XYZ",price<m>) {
+hn ({Broker},"PRICE_XYZ",int<m> price) {
     obliv if (price <= threshold) then {
         send({Broker},"BUY_XYZ",10);
     } else {

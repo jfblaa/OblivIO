@@ -1,14 +1,14 @@
 {Broker}
 
-declare price_abc := 42<m>@{};
-declare price_xyz := 84<m>@{};
+declare int<m> price_abc := 42@{};
+declare int<m> price_xyz := 84@{};
 
-declare portfolio_abc := 10<m>@{Customer};
-declare portfolio_xyz := 20<m>@{Customer};
+declare int<m> portfolio_abc := 10@{Customer};
+declare int<m> portfolio_xyz := 20@{Customer};
 
 
 
-hn ({Customer},"PRICE",stock<m>) {
+hn ({Customer},"PRICE",int<m> stock) {
     obliv if (stock = "ABC") then {
         send({Customer},"PRICE_ABC",price_abc);
     } else {
@@ -16,18 +16,22 @@ hn ({Customer},"PRICE",stock<m>) {
     }
 }
 
-hn ({Customer},"BUY_ABC",amount<m>) {
+hn ({Customer},"BUY_ABC",int<m> amount) {
     portfolio_abc := portfolio_abc + amount;
+    print("Bought ABC",amount);
 }
 
-hn ({Customer},"SELL_ABC",amount<m>) {
+hn ({Customer},"SELL_ABC",int<m> amount) {
     portfolio_abc := portfolio_abc - amount;
+    print("Sold ABC",amount);
 }
 
-hn ({Customer},"BUY_XYZ",amount<m>) {
+hn ({Customer},"BUY_XYZ",int<m> amount) {
     portfolio_xyz := portfolio_xyz + amount;
+    print("Bought XYZ",amount);
 }
 
-hn ({Customer},"SELL_XYZ",amount<m>) {
+hn ({Customer},"SELL_XYZ",int<m> amount) {
     portfolio_xyz := portfolio_xyz - amount;
+    print("Sold XYZ",amount);
 } 

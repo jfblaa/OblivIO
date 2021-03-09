@@ -1,10 +1,10 @@
 {Clinic}
 
-declare next_slot := 42<m>@{Patient};
+declare int<m> next_slot := 42@{Patient};
 
 
 
-hn ({Doctor},"REFER",patient_id<m>) {
+hn ({Doctor},"REFER",int<m> patient_id) {
   send({Patient},"APPOINTMENT",next_slot);
   next_slot := next_slot + 1;
 }

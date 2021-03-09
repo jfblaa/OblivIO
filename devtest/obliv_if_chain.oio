@@ -1,6 +1,6 @@
 {}
 
-declare x := 0<m>@{};
+declare int<m> x := 0@{};
 
 init {
     obliv if 0
@@ -8,11 +8,11 @@ init {
     else skip;
 }
 
-hn ({},"SET",v<m>) {
+hn ({},"SET",int<m> v) {
     x := v;
     send({},"CHECK",x);
 }
 
-hn ({},"CHECK",v<m>) {
+hn ({},"CHECK",int<m> v) {
     skip;
 }

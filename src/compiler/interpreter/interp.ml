@@ -6,7 +6,7 @@ module L = Level
 module V = Value
 module M = Message
 
-type handler_info = {cmd:A.cmd; x_var:A.var; s_var: A.var}
+type handler_info = {cmd:A.cmd; var:A.var; sizevar: A.var}
 type node_state = ConsumerState | ProducerState of A.cmd
 
 type prog_config
@@ -171,7 +171,7 @@ let consumer_step (({handlers;msg_queue;_} as ctxt): prog_config) =
       ; L.to_string sender
       ];
       ConsumerState
-    | Some {cmd=A.Cmd{pos;_} as cmd;x_var;s_var} ->
+    | Some {cmd=A.Cmd{pos;_} as cmd;var;sizevar} ->
       let v,cmd =
         match packet with
         | Real (_,v) ->
@@ -185,8 +185,8 @@ let consumer_step (({handlers;msg_queue;_} as ctxt): prog_config) =
       let sval_base = V.IntVal (snd v) in
 
       let s_val = (sval_base, V.size_of_base sval_base) in
-      ctxt.mem <- (s_var,s_val)::(x_var,v)::ctxt.mem;
-      ctxt.hl_vars <- Some (x_var,s_var);
+      ctxt.mem <- (sizevar,s_val)::(var,v)::ctxt.mem;
+      ctxt.hl_vars <- Some (var,sizevar);
       ProducerState cmd
 
 let step_node (ctxt: prog_config) =
@@ -235,14 +235,14 @@ let rec step_sys time nodes =
 
 let interp (progs: A.program list) =
   let setup (A.Prog{level;vardecls;init;hns}) =
-    let f acc (A.Hn{level;tag;svar=(x_var,s_var);cmd;_}) =
-      let hn_info = {cmd;x_var;s_var} in
+    let f acc (A.Hn{level;tag;sizevar;var;cmd;_}) =
+      let hn_info = {cmd;sizevar;var} in
       ((level,tag),hn_info) :: acc in
-    let g acc (A.VarDecl{var;basevalue;svar;_}) =
+    let g acc (A.VarDecl{var;basevalue;sizevar;_}) =
       let size = V.size_of_base basevalue in
       let sizeval = V.IntVal size in
       let sizesize = V.size_of_base sizeval in
-      (var,(basevalue,size))::(svar,(sizeval,sizesize))::acc in
+      (var,(basevalue,size))::(sizevar,(sizeval,sizesize))::acc in
     let state =
       match init with
       | Some cmd -> ProducerState cmd

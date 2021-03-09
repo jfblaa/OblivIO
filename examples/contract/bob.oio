@@ -1,11 +1,11 @@
 {Bob}
 
-hn ({Alice},"OFFER",offer<m>) {
+hn ({Alice},"OFFER",int<m> offer) {
   obliv if offer >= 200
   then send({Alice},"ACCEPT",0);
   else send({Alice},"DECLINE",0);
 }
 
-hn ({Alice},"CONTRACT",contract<m>) {
+hn ({Alice},"CONTRACT",string<m> contract) {
   print("Contract received",contract);
 }

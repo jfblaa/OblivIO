@@ -1,12 +1,12 @@
 {Patient}
 
-declare result := 100<m>@{Alice};
-declare appointment := 0<m>@{Clinic};
+declare int<m> result := 100@{Alice};
+declare int<m> appointment := 0@{Clinic};
 
 
 
 init send({Doctor},"RESULT",result);
 
-hn ({Clinic},"APPOINTMENT",time<m>) {
+hn ({Clinic},"APPOINTMENT",int<m> time) {
   appointment := time;
 }

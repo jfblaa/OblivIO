@@ -20,6 +20,7 @@
 %token PLUS MINUS EQ NEQ LT LE GT GE CARET
 %token AND OR ASSIGN IF THEN ELSE WHILE DO
 %token SKIP HN OBLIV SEND AT PRINT
+%token INTTYPE STRINGTYPE
 
 %left OR
 %left AND
@@ -116,13 +117,17 @@ basevalue:
 | s=STRING
   { StringVal s }
 
+type_anno:
+| INTTYPE x=angled(ID) { x }
+| STRINGTYPE x=angled(ID) { x }
+
 vardecl:
-| DECLARE var=var ASSIGN basevalue=basevalue svar=angled(ID) AT level=lvl SEMICOLON
-  { VarDecl {var; basevalue; svar; level; pos=$startpos} }
+| DECLARE sizevar=type_anno var=var ASSIGN basevalue=basevalue AT level=lvl SEMICOLON
+  { VarDecl {var; basevalue; sizevar; level; pos=$startpos} }
 
 hn:
-| HN LPAREN level=lvl COMMA tag=STRING COMMA svar=pair(var,angled(var)) RPAREN cmd=cmd
-  { Hn {level;tag;svar;cmd;pos=$startpos} }
+| HN LPAREN level=lvl COMMA tag=STRING COMMA sizevar=type_anno var=var RPAREN cmd=cmd
+  { Hn {level;tag;sizevar;var;cmd;pos=$startpos} }
 
 init:
 | INIT c=cmd { c }
