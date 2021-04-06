@@ -1,21 +1,18 @@
 type pos = Lexing.position 
 type level = Level.level
 
+module T=Types
+
 include Oper
 
 type program = Prog of { node: string; decls: decl list; init: cmd option; chs: ch list }
-and ty
-  = IntType of level
-  | StringType of level
-  | OblivIntType of level
-  | OblivStringType of level
 and decl
-  = VarDecl of { ty: ty; var: var; init: exp; pos: pos }
-  | ChDecl of { ty: ty; name: string; pos: pos }
+  = VarDecl of { var: var; init: exp; pos: pos }
+  | ChDecl of { name: string; pos: pos }
 and ch
-  = Ch of { ty: ty; name: string; var: var; prelude: cmd; body: cmd; pos: pos }
-and var = string
-and exp = Exp of { exp_base: exp_base; pos: pos }
+  = Ch of { name: string; var: var; prelude: cmd; body: cmd; pos: pos }
+and var = string * T.ty
+and exp = Exp of { exp_base: exp_base; ty: T.ty; pos: pos }
 and exp_base
   = IntExp of int
   | StringExp of string
@@ -36,4 +33,3 @@ and cmd_base
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }
   | PhantomCmd of cmd
   | PrintCmd of { info: string option; exp: exp }
- 

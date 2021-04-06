@@ -31,8 +31,11 @@ let parse file =
   close_in input;
   parseRes
 
-let interp files =
-  Interpreter.Interp.interp files
+let semant prog =
+  Semant.transProg prog
+
+(*let interp files =
+  Interpreter.Interp.interp files*)
   
 let withFlags {files} =
   let exitCode = ref 0 in
@@ -40,7 +43,8 @@ let withFlags {files} =
   begin 
     try
         List.map parse files
-        |> interp
+        |> List.map semant
+        |> fun _ -> ()
     with
       CompileError -> (exitCode := 1)
   end;

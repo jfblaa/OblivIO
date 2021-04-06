@@ -9,6 +9,7 @@
     raise (Error err_str)
 }
 
+let nonnewline=[^'\n']
 let letter=['a'-'z' 'A'-'Z']
 let digit=['0'-'9']
 let idchar=letter | digit | '_'
@@ -29,30 +30,34 @@ rule token = parse
 | '-'                 { MINUS }
 | '^'                 { CARET }
 | "="                 { EQ }
-| "!="                { NEQ }
-| '<'                 { LT }
-| '>'                 { GT }
+| "<>"                { NEQ }
 | "<="                { LE }
 | ">="                { GE }
-| "&&"                { AND }
-| "||"                { OR }
+| '<'                 { LT }
+| '>'                 { GT }
+| '!'                 { PROJECT }
+| '?'                 { INJECT }
+| "and"               { AND }
+| "or"                { OR }
 | '@'                 { AT }
 | ":="                { ASSIGN }
-| "declare"           { DECLARE }
+| "?="                { OBLIVASSIGN }
+| "variable"          { VAR }
+| "channel"           { CH }
 | "init"              { INIT }
+| "size"              { SIZE }
 | "obliv"             { OBLIV }
-| "print"             { PRINT }
 | "if"                { IF }
 | "then"              { THEN }
 | "else"              { ELSE }
-| "send"              { SEND }
+| "output"            { OUTPUT }
 | "while"             { WHILE }
 | "do"                { DO }
 | "skip"              { SKIP }
-| "hn"                { HN }
 | "int"               { INTTYPE }
 | "string"            { STRINGTYPE }
-| "/*"                { comment 0 lexbuf }
+| "print"             { PRINT }
+| "//" nonnewline* '\n' { Lexing.new_line lexbuf; token lexbuf }
 | digit+ as i         { match int_of_string_opt i with
                         | Some i' -> INT i'
                         | None -> error lexbuf "Integer too large" }
@@ -73,10 +78,3 @@ and string current = parse
 | [' '-'~']           { string (current^(Lexing.lexeme lexbuf)) lexbuf }
 | eof                 { error lexbuf "Unclosed string at end of file" }
 | _ as c              { error lexbuf @@ "Illegal character '" ^ (String.make 1 c) ^ "'" }
-
-and comment commentLevel = parse
-| "/*"     { comment (commentLevel + 1) lexbuf }
-| "*/"     { (if commentLevel = 0 then token else comment (commentLevel - 1)) lexbuf }
-| '\n'     { Lexing.new_line lexbuf; comment commentLevel lexbuf }
-| eof      { error lexbuf "Unclosed comment at end of file" }
-| _        { comment commentLevel lexbuf }     (* continune *)

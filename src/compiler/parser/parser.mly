@@ -6,7 +6,6 @@
 
 %{
   open Common.Absyn
-  open Common.Value
   module Level = Common.Level
 %}
 
@@ -14,12 +13,13 @@
 %token <string> ID
 %token <int> INT
 %token <string> STRING
-%token DECLARE INIT
-%token COMMA SEMICOLON
+%token VAR CH INIT
+%token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS EQ NEQ LT LE GT GE CARET
-%token AND OR ASSIGN IF THEN ELSE WHILE DO
-%token SKIP HN OBLIV SEND AT PRINT
+%token PROJECT INJECT SIZE
+%token AND OR ASSIGN OBLIVASSIGN IF THEN ELSE WHILE DO
+%token SKIP OBLIV OUTPUT AT PRINT
 %token INTTYPE STRINGTYPE
 
 %left OR
@@ -27,7 +27,7 @@
 %nonassoc EQ NEQ GT LT GE LE
 %left PLUS MINUS 
 %left CARET
-%nonassoc UMINUS
+%nonassoc UMINUS PROJECT INJECT
 
 %start <Common.Absyn.program> program  
 (* Observe that we need to use fully qualified types for the start symbol *)
@@ -68,14 +68,17 @@ var:
 
 (* Expressions *)
 exp_base:
-| i=INT       { IntExp i }
-| s=STRING    { StringExp s }
-| x=ID        { VarExp x }
-| e=binop_exp { e }
+| i=INT             { IntExp i }
+| s=STRING          { StringExp s }
+| x=ID              { VarExp x }
+| PROJECT e=exp     { ProjExp e }
+| INJECT e=exp      { InjExp e }
+| SIZE e=paren(exp) { SizeExp e }
+| e=binop_exp       { e }
 
 exp:
-| e=exp_base  { Exp {exp_base=e; pos=$startpos} }
-| e=paren(exp_base)  { Exp {exp_base=e; pos=$startpos} }
+| e=exp_base          { Exp {exp_base=e; pos=$startpos} }
+| e=paren(exp_base)   { Exp {exp_base=e; pos=$startpos} }
 
 cmd_base_seq:
 | c=cmd_base
@@ -86,6 +89,8 @@ cmd_base_seq:
 cmd_base:
 | v=var ASSIGN e=exp SEMICOLON
   { AssignCmd{var=v; exp=e} }
+| v=var OBLIVASSIGN e=exp SEMICOLON
+  { OblivAssignCmd{var=v; exp=e} }
 | SKIP SEMICOLON
   { SkipCmd }
 | IF test=exp THEN thn=cmd ELSE els=cmd
@@ -94,8 +99,8 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
-| SEND LPAREN level=lvl COMMA tag=STRING COMMA exp=exp RPAREN SEMICOLON
-  { SendCmd{level;tag;exp} }
+| OUTPUT channel=ID exp=paren(exp) SEMICOLON
+  { OutputCmd{channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
 
@@ -109,30 +114,28 @@ cmd:
 | c=brace(cmd_base_seq)
   { Cmd {cmd_base=c; pos=$startpos} }
 
-basevalue:
-| i=INT
-  { IntVal i }
-| MINUS i=INT
-  { IntVal (-i) }
-| s=STRING
-  { StringVal s }
-
 type_anno:
-| INTTYPE x=angled(ID) { x }
-| STRINGTYPE x=angled(ID) { x }
+| INTTYPE AT lvl=lvl            { IntType lvl }
+| STRINGTYPE AT lvl=lvl         { StringType lvl }
+| OBLIV INTTYPE AT lvl=lvl      { OblivIntType lvl }
+| OBLIV STRINGTYPE AT lvl=lvl   { OblivStringType lvl }
 
-vardecl:
-| DECLARE sizevar=type_anno var=var ASSIGN basevalue=basevalue AT level=lvl SEMICOLON
-  { VarDecl {var; basevalue; sizevar; level; pos=$startpos} }
+decl:
+| VAR ty=type_anno var=var ASSIGN init=exp SEMICOLON
+  { VarDecl {ty; var; init; pos=$startpos} }
+| VAR ty=type_anno var=var OBLIVASSIGN init=exp SEMICOLON
+  { VarDecl {ty; var; init; pos=$startpos} }
+| CH ty=type_anno name=ID SEMICOLON
+  { ChDecl {ty; name; pos=$startpos} }
 
-hn:
-| HN LPAREN level=lvl COMMA tag=STRING COMMA sizevar=type_anno var=var RPAREN cmd=cmd
-  { Hn {level;tag;sizevar;var;cmd;pos=$startpos} }
+ch:
+| ty=type_anno name=ID var=paren(var) prelude=brace(cmd_seq) body=brace(cmd_seq)
+  { Ch {ty;name;var;prelude;body;pos=$startpos} }
 
 init:
 | INIT c=cmd { c }
 
 (* Top-level *)
 program:
-| level=lvl vardecls=vardecl* init=init? hns=hn* EOF
-  { Prog {level;vardecls;init;hns} }
+| node=ID decls=decl* init=init? chs=ch* EOF
+  { Prog {node;decls;init;chs} }
