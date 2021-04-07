@@ -13,6 +13,7 @@ type node_state = ConsumerState | ProducerState of A.cmd
 
 type prog_config
   = { node: string
+    ; adv: L.level option
     ; handlers: (string, handler_info) H.t
     ; chdecls: (string, L.level) H.t
     ; mutable state: node_state
@@ -193,9 +194,10 @@ let producer_step (ctxt: prog_config) cmd =
       continue (~> (A.IfCmd{test;thn;els=skipcmd})) []
     | OutputCmd {channel;exp} when phantom ->
       let level =
-        match H.find_opt ctxt.chdecls channel with
-        | Some level -> level
-        | None ->
+        match H.find_opt ctxt.chdecls channel, H.find_opt ctxt.handlers channel with
+        | Some level, _ -> level
+        | None, Some {ty=Types.Type{level;_};_} -> level
+        | _ ->
           print_endline @@ "WARNING: node " ^ ctxt.node ^ " is attempting output on undeclared channel " ^ channel;
           Level.bottom in
       let z =
@@ -203,7 +205,7 @@ let producer_step (ctxt: prog_config) cmd =
         | V.Obliv _ -> raise InterpFatal
         | V.Regular (_,z) -> z in
       doneby
-      [ M.Msg
+      [ ctxt.adv, M.Msg
         { sender = ctxt.node
         ; channel
         ; level
@@ -211,9 +213,10 @@ let producer_step (ctxt: prog_config) cmd =
         } ]
     | OutputCmd {channel;exp} ->
       let level =
-        match H.find_opt ctxt.chdecls channel with
-        | Some level -> level
-        | None ->
+        match H.find_opt ctxt.chdecls channel, H.find_opt ctxt.handlers channel with
+        | Some level, _ -> level
+        | None, Some {ty=Types.Type{level;_};_} -> level
+        | _ ->
           print_endline @@ "WARNING: node " ^ ctxt.node ^ " is attempting output on undeclared channel " ^ channel;
           Level.bottom in
       let rv =
@@ -221,7 +224,7 @@ let producer_step (ctxt: prog_config) cmd =
         | V.Obliv _ -> raise InterpFatal
         | rv -> rv in
       doneby
-      [ M.Msg
+      [ ctxt.adv, M.Msg
         { sender = ctxt.node
         ; channel
         ; level
@@ -282,17 +285,22 @@ let step_node (ctxt: prog_config) =
     producer_step ctxt cmd
 
 let rec step_sys time (chtbl:channel_table) nodes =
-  print_endline @@ " ----- ROUND " ^ Int.to_string time ^ " ----- ";
+  (*print_endline @@ Printf.sprintf " %-*d " 10 time;*)
+  print_endline @@ "Time " ^ Int.to_string time ^ ":";
   let f acc node = 
     step_node node @ acc in
   let round_msgs = List.fold_left f [] nodes in
-  let g (M.Msg{channel;_} as msg) =
-    print_endline @@ M.to_string_at_level msg L.bottom; (* debug printing to bot! *)
-    (*print_endline @@ M.to_string_at_level msg (L.of_list ["Patient";"Doctor";"Clinic";"Customer";"Broker";"Relay";"Alice"]);*)
+  let g (adv, (M.Msg{channel;_} as msg)) =
+    begin match adv with
+    | Some ladv ->  print_endline @@ M.to_string_at_level msg ladv
+    | None -> () end;
     match H.find_opt chtbl channel with
     | None ->
       print_endline @@ "WARNING: no channel with name" ^ channel
     | Some node ->
+      begin match node.adv with
+      | Some ladv ->  print_endline @@ M.to_string_at_level msg ladv
+      | None -> () end;
       node.msg_queue <- node.msg_queue @ [msg] in
   List.iter g round_msgs;
   let h node =
@@ -304,13 +312,14 @@ let rec step_sys time (chtbl:channel_table) nodes =
 
 let interp (progs: A.program list) =
   let chtbl = H.create 1024 in
-  let setup (A.Prog{node;decls;init;chs}) =
+  let setup (A.Prog{node;adv;decls;init;chs}) =
     let state =
       match init with
       | Some cmd -> ProducerState cmd
       | None -> ConsumerState in
     let ctxt =
       { node
+      ; adv
       ; handlers = H.create 1024
       ; chdecls = H.create 1024
       ; state

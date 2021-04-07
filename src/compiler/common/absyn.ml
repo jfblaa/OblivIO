@@ -3,7 +3,7 @@ type level = Level.level
 
 include Oper
 
-type program = Prog of { node: string; decls: decl list; init: cmd option; chs: ch list }
+type program = Prog of { node: string; adv: level option; decls: decl list; init: cmd option; chs: ch list }
 and ty
   = IntType of level
   | StringType of level

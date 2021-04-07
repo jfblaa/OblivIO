@@ -1,5 +1,7 @@
 Patient
 
+@{}
+
 channel int@{Doctor} RESULT;
 
 variable obliv int@{Clinic} time := ?0;

@@ -10,7 +10,7 @@ type message
 let to_string (Msg {sender; channel; packet; _}) =
   String.concat ""
   [ sender
-  ; ": "
+  ; " sent "
   ; channel
   ; "("
   ; (match packet with
@@ -22,7 +22,7 @@ let to_string (Msg {sender; channel; packet; _}) =
 let to_string_at_level (Msg {sender; channel; level; packet}) ladv =
   String.concat ""
   [ sender
-  ; ": "
+  ; " sent "
   ; channel
   ; "("
   ; (match packet with

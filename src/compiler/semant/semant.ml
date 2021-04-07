@@ -239,7 +239,7 @@ let transDecl ({gamma;lambda;err} as ctxt) dec =
     H.add lambda name ty;
     ChDecl{name;ty;pos}
 
-let transProg (A.Prog{node;decls;init;chs}) =
+let transProg (A.Prog{node;adv;decls;init;chs}) =
   let ctxt = 
     { gamma = H.create 1024
     ; lambda = H.create 1024
@@ -251,4 +251,4 @@ let transProg (A.Prog{node;decls;init;chs}) =
   let decls = List.map (transDecl ctxt) decls in
   let init = Option.map (transCmd ctxt L.bottom) init in
   let chs = List.map (transCh ctxt) chs in
-  Prog{node;decls;init;chs}
+  not (Err.any_errors ctxt.err), Prog{node;adv;decls;init;chs}

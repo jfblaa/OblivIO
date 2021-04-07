@@ -1,5 +1,7 @@
 Alice
 
+@{Server}
+
 variable obliv int@{Server} x := ?0;
 channel int@{Server} ECHO_IN;
 

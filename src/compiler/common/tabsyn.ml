@@ -5,7 +5,7 @@ module T=Types
 
 include Oper
 
-type program = Prog of { node: string; decls: decl list; init: cmd option; chs: ch list }
+type program = Prog of { node: string; adv: level option; decls: decl list; init: cmd option; chs: ch list }
 and decl
   = VarDecl of { var: var; init: exp; pos: pos }
   | ChDecl of { name: string; ty: T.ty; pos: pos }

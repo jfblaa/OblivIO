@@ -9,7 +9,8 @@ variable string@{} file_1 := "45 61 73 74 65 72 20 65 67 67";
 variable string@{} file_2 := "4E 6F 74 68 69 6E 67 20 74 6F 20 73 65 65 20 68 65 72 65 2E 2E 2E";
 
 variable obliv int@{} ignored := ?0;
-variable obliv string@{Client} name := ?"";
+variable obliv string@{} name := ?"";
+variable obliv string@{Client} secname := ?"";
 
 variable int@{Client} filesize := 0;
 variable string@{Client} file := "";
@@ -22,28 +23,28 @@ int@{} INDEX(ignored) {
     skip;
 }
 
-string@{Client} SIZE(name) {
-    skip;
-} {
-    obliv if !name = "file_0"
-    then filesize ?= ?size(file_0);
-    else obliv if !name = "file_1"
-    then filesize ?= ?size(file_1);
-    else obliv if !name = "file_2"
-    then filesize ?= ?size(file_2);
-    else filesize ?= ?0;
+string@{} GET(name) {
+    if !name = "file_0"
+    then file := file_0;
+    else if !name = "file_1"
+    then file := file_1;
+    else if !name = "file_2"
+    then file := file_2;
+    else file := "ERROR: Bad request";
 
-    output SIZE(filesize);
+    output FILE(file);
+} {
+    skip;
 }
 
-string@{Client} GET(name) {
+string@{Client} GET_SECURE(secname) {
     skip;
 } {
-    obliv if !name = "file_0"
+    obliv if !secname = "file_0"
     then file ?= ?file_0;
-    else obliv if !name = "file_1"
+    else obliv if !secname = "file_1"
     then file ?= ?file_1;
-    else obliv if !name = "file_2"
+    else obliv if !secname = "file_2"
     then file ?= ?file_2;
     else file ?= ?"ERROR: Bad request";
 

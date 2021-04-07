@@ -135,7 +135,10 @@ ch:
 init:
 | INIT c=brace(cmd_seq) { c }
 
+attacker:
+| AT lvl=lvl { lvl }
+
 (* Top-level *)
 program:
-| node=ID decls=decl* init=init? chs=ch* EOF
-  { Prog {node;decls;init;chs} }
+| node=ID adv=attacker? decls=decl* init=init? chs=ch* EOF
+  { Prog {node;adv;decls;init;chs} }

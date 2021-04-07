@@ -32,7 +32,10 @@ let parse file =
   parseRes
 
 let semant prog =
-  Semant.transProg prog
+  let success, res = Semant.transProg prog in
+  if success
+  then res
+  else raise CompileError
 
 let interp progs =
   Interpreter.Interp.interp progs
@@ -42,9 +45,9 @@ let withFlags {files} =
   
   begin 
     try
-        List.map parse files
-        |> List.map semant
-        |> interp
+      List.map parse files
+      |> List.map semant
+      |> interp
     with
       CompileError -> (exitCode := 1)
   end;
