@@ -8,9 +8,9 @@ include Oper
 type program = Prog of { node: string; decls: decl list; init: cmd option; chs: ch list }
 and decl
   = VarDecl of { var: var; init: exp; pos: pos }
-  | ChDecl of { name: string; pos: pos }
+  | ChDecl of { name: string; ty: T.ty; pos: pos }
 and ch
-  = Ch of { name: string; var: var; prelude: cmd; body: cmd; pos: pos }
+  = Ch of { ty: Types.ty; name: string; var: var; prelude: cmd; body: cmd; pos: pos }
 and var = string * T.ty
 and exp = Exp of { exp_base: exp_base; ty: T.ty; pos: pos }
 and exp_base

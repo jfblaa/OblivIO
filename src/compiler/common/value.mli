@@ -1,9 +1,11 @@
 
 type basevalue =
-  StringVal of string
+| StringVal of string
 | IntVal of int
 
-type value = basevalue * int
+type value = 
+  | Regular of basevalue * int
+  | Obliv of bool * basevalue * int
 
 val size_of_base: basevalue -> int
 

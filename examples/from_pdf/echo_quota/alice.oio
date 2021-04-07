@@ -1,0 +1,15 @@
+Alice
+
+variable obliv int@{Server} x := ?0;
+channel int@{Server} ECHO_IN;
+
+init {
+    output ECHO_IN(!x);
+}
+
+int@{Server} ECHO_OUT(x) {
+    skip;
+} {
+    print("Alice received:",!x);
+    output ECHO_IN(!x+1);
+}

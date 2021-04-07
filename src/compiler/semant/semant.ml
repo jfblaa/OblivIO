@@ -223,7 +223,7 @@ let transCh ({err;_} as ctxt) (A.Ch{ty;name;var;prelude;body;pos}) =
   checkFlowType oblivty varty err pos; checkFlowType varty oblivty err pos;
   let prelude = transCmd ctxt L.bottom prelude in
   let body = transCmd ctxt (Ty.level ty) body in
-  Ch{name;var=(var,varty);prelude;body;pos}
+  Ch{ty;name;var=(var,varty);prelude;body;pos}
 
 let transDecl ({gamma;lambda;err} as ctxt) dec =
   match dec with
@@ -237,7 +237,7 @@ let transDecl ({gamma;lambda;err} as ctxt) dec =
   | A.ChDecl {ty;name;pos} ->
     let ty = transTy ty in
     H.add lambda name ty;
-    ChDecl{name;pos}
+    ChDecl{name;ty;pos}
 
 let transProg (A.Prog{node;decls;init;chs}) =
   let ctxt = 
