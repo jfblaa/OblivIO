@@ -1,0 +1,51 @@
+Server
+
+channel string@{} OPTION;
+channel int@{Client} SIZE;
+channel string@{Client} FILE;
+
+variable string@{} file_0 := "48 65 6C 6C 6F 20 57 6F 72 6C 64 21";
+variable string@{} file_1 := "45 61 73 74 65 72 20 65 67 67";
+variable string@{} file_2 := "4E 6F 74 68 69 6E 67 20 74 6F 20 73 65 65 20 68 65 72 65 2E 2E 2E";
+
+variable obliv int@{} ignored := ?0;
+variable obliv string@{Client} name := ?"";
+
+variable int@{Client} filesize := 0;
+variable string@{Client} file := "";
+
+int@{} INDEX(ignored) {
+    output OPTION("file_0");
+    output OPTION("file_1");
+    output OPTION("file_2");
+} {
+    skip;
+}
+
+string@{Client} SIZE(name) {
+    skip;
+} {
+    obliv if !name = "file_0"
+    then filesize ?= ?size(file_0);
+    else obliv if !name = "file_1"
+    then filesize ?= ?size(file_1);
+    else obliv if !name = "file_2"
+    then filesize ?= ?size(file_2);
+    else filesize ?= ?0;
+
+    output SIZE(filesize);
+}
+
+string@{Client} GET(name) {
+    skip;
+} {
+    obliv if !name = "file_0"
+    then file ?= ?file_0;
+    else obliv if !name = "file_1"
+    then file ?= ?file_1;
+    else obliv if !name = "file_2"
+    then file ?= ?file_2;
+    else file ?= ?"ERROR: Bad request";
+
+    output FILE(file);
+}
