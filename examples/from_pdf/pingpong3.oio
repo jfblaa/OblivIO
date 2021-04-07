@@ -4,8 +4,6 @@ variable string@{Alice} test := "Hello";
 variable string@{Alice} reply := "";
 
 variable obliv string@{Alice} msg := ?"";
-variable obliv string@{Alice} reply1 := ?"";
-variable obliv string@{Alice} reply2 := ?"";
 
 channel string@{Alice} PONG;
 
@@ -13,11 +11,8 @@ string@{Alice} PING(msg) {
     skip;
 } {
     obliv if !msg = test
-    then reply1 := ?("Hello");
-    else reply2 := ?("BAD");
-    
-    reply ?= reply1;
-    reply ?= reply2;
+    then reply ?= ?("Hello");
+    else reply ?= ?("BAD");
     
     output PONG(reply);
 }
