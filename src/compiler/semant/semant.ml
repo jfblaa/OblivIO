@@ -46,7 +46,7 @@ let isEqual t1 t2 =
 
 let checkEqual t1 t2 err pos =
   if not (isEqual t1 t2)
-  then Err.error err pos @@ "type " ^ Ty.to_string t1 ^ " not equal to type " ^ Ty.to_string t2
+  then Err.error err pos @@ "type " ^ (Ty.base_to_string @@ Ty.base t1) ^ " not equal to type " ^ (Ty.base_to_string @@ Ty.base t2)
 
 let checkFlow l1 l2 err pos =
   if not (L.flows_to l1 l2)
@@ -61,7 +61,6 @@ let checkComparable t1 t2 err pos =
   match Ty.base t1, Ty.base t2 with
   | Ty.INT, Ty.INT -> ()
   | Ty.STRING, Ty.STRING -> ()
-  | b1, b2 when b1 = b2 -> ()
   | b1, b2 -> Err.error err pos @@ "types " ^ Ty.base_to_string b1 ^ " and " ^ Ty.base_to_string b2 ^ " do not match"
 
 let checkLowPc pc v err pos =
