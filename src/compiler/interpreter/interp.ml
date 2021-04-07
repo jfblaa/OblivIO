@@ -236,7 +236,7 @@ let producer_step (ctxt: prog_config) cmd =
         match info with
         | Some s -> s ^ ": "
         | None -> "" in
-      if not phantom then print_endline @@ intro ^ V.to_string v;
+      if not phantom then print_endline @@ "(" ^ ctxt.node ^ ") " ^ intro ^ V.to_string v;
       doneby []
     | PhantomCmd cmd' ->
       let msg = _P true cmd' in
@@ -286,20 +286,21 @@ let step_node (ctxt: prog_config) =
 
 let rec step_sys time (chtbl:channel_table) nodes =
   (*print_endline @@ Printf.sprintf " %-*d " 10 time;*)
-  print_endline @@ "Time " ^ Int.to_string time ^ ":";
   let f acc node = 
     step_node node @ acc in
   let round_msgs = List.fold_left f [] nodes in
   let g (adv, (M.Msg{channel;_} as msg)) =
     begin match adv with
-    | Some ladv ->  print_endline @@ M.to_string_at_level msg ladv
+    | Some ladv ->  print_endline @@ 
+      "Time " ^ Int.to_string time ^ ": " ^ M.to_string_at_level msg ladv
     | None -> () end;
     match H.find_opt chtbl channel with
     | None ->
       print_endline @@ "WARNING: no channel with name" ^ channel
     | Some node ->
       begin match node.adv with
-      | Some ladv ->  print_endline @@ M.to_string_at_level msg ladv
+      | Some ladv ->  print_endline @@
+        "Time " ^ Int.to_string time ^ ": " ^ M.to_string_at_level msg ladv
       | None -> () end;
       node.msg_queue <- node.msg_queue @ [msg] in
   List.iter g round_msgs;

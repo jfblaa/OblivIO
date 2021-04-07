@@ -28,8 +28,9 @@ string@{Client} OPTION(file) {
 string@{Client} FILE(file) {
     skip;
 } {
-    print("File received:",!file);
+    print("File received",!file);
 }
+
 
 string@{Client} INPUT_STUB(request) {
     skip;
@@ -40,7 +41,7 @@ string@{Client} INPUT_STUB(request) {
 string@{Client} SCREEN_STUB(msg) {
     n := n + 1;
 } {
-    print("File option:",!msg);
+    print("File option",!msg);
     if n = 3
     then output INPUT_STUB("file_2");
     else skip;
