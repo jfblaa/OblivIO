@@ -64,6 +64,15 @@ let checkComparable t1 t2 err pos =
   | b1, b2 when b1 = b2 -> ()
   | b1, b2 -> Err.error err pos @@ "types " ^ Ty.base_to_string b1 ^ " and " ^ Ty.base_to_string b2 ^ " do not match"
 
+let checkLowPc pc v err pos =
+  if not (L.flows_to pc L.bottom)
+  then Err.error err pos @@ "assignment to non-obliv variable " ^ v ^ " only allowed under low pv" 
+
+let isNonObliv t =
+  match Ty.base t with
+  | (Ty.OBLIV _) -> false
+  | _ -> true
+
 let checkObliv t err pos =
   match Ty.base t with
   | (Ty.OBLIV _) -> ()
@@ -141,17 +150,19 @@ let transExp ({err;_} as ctxt) =
   in trexp
 
 let transCmd ({err;_} as ctxt) =
-  let rec trcmd level (A.Cmd{cmd_base;pos}) =
+  let rec trcmd pc (A.Cmd{cmd_base;pos}) =
     let fromBase cmd_base = Cmd{cmd_base;pos} in
     match cmd_base with
     | SkipCmd -> fromBase SkipCmd
     | SeqCmd {c1;c2} ->
-      let c1 = trcmd level c1 in
-      let c2 = trcmd level c2 in
+      let c1 = trcmd pc c1 in
+      let c2 = trcmd pc c2 in
       fromBase @@ SeqCmd {c1;c2}
     | AssignCmd {var;exp} ->
       let varty = lookupVar ctxt var pos in
       let e,ety = e_ty @@ transExp ctxt exp in
+      if isNonObliv varty
+      then checkLowPc pc var err pos;
       checkEqual ety varty err pos;
       checkFlowType ety varty err pos;
       fromBase @@ AssignCmd{var=(var,varty);exp=e}
@@ -174,23 +185,23 @@ let transCmd ({err;_} as ctxt) =
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let thn = trcmd level thn in
-      let els = trcmd level els in
+      let thn = trcmd pc thn in
+      let els = trcmd pc els in
       fromBase @@ IfCmd{test;thn;els}
     | OblivIfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
-      let thn = trcmd (L.lub level testlvl) thn in
-      let els = trcmd (L.lub level testlvl) els in
+      let thn = trcmd (L.lub pc testlvl) thn in
+      let els = trcmd (L.lub pc testlvl) els in
       fromBase @@ OblivIfCmd{test;thn;els}
     | WhileCmd{test;body} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let body = trcmd level body in
+      let body = trcmd pc body in
       fromBase @@ WhileCmd{test;body}
     | PhantomCmd c ->
-      fromBase @@ PhantomCmd (trcmd level c)
+      fromBase @@ PhantomCmd (trcmd pc c)
     | PrintCmd {info;exp} ->
       let exp,ety = e_ty @@transExp ctxt exp in
       checkNonObliv ety err pos;
