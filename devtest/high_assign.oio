@@ -1,0 +1,14 @@
+Alice
+
+variable int@{Alice} x := 0;
+variable obliv int@{Alice} new_x := ?0;
+
+init {
+    skip;
+}
+
+int@{Alice} SET(new_x) {
+    x := 0;
+} {
+    new_x := ?0;
+}

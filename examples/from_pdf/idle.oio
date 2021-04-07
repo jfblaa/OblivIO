@@ -9,7 +9,9 @@ variable obliv int@{Carol} z := ?0;
 channel int@{Bob} BOB_DONE;
 channel int@{Carol} CAROL_DONE;
 
-init output IDLE(0);
+init {
+    output IDLE(0);
+}
 
 int@{Alice} IDLE(x) {
     // x is not in context during handler prelude - only used to record 'high-score' in trace

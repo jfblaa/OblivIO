@@ -1,17 +1,17 @@
 Server
 
 variable obliv int@{Alice} x := ?0;
-channel int@{Alice} PONG;
+channel int@{Alice} ECHO_OUT;
 
 // Restrict the number of output bytes triggered by Alice
 variable int@{} quota := 256;
 
-int@{Alice} PING(x) {
+int@{Alice} ECHO_IN(x) {
     // prelude is always run, hence this is fine
     quota := quota - size(!x);
 } {
     // No assignments to store, hence no need for buffers
     if (quota >= size(!x))
-    then output PONG(!x+1);
+    then output ECHO_OUT(!x);
     else skip;
 }

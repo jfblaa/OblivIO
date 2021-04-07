@@ -66,7 +66,7 @@ let checkComparable t1 t2 err pos =
 
 let checkLowPc pc v err pos =
   if not (L.flows_to pc L.bottom)
-  then Err.error err pos @@ "assignment to non-obliv variable " ^ v ^ " only allowed under low pv" 
+  then Err.error err pos @@ "assignment to non-obliv variable " ^ v ^ " only allowed under low pc" 
 
 let isNonObliv t =
   match Ty.base t with

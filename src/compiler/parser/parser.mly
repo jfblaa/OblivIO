@@ -133,7 +133,7 @@ ch:
   { Ch {ty;name;var;prelude;body;pos=$startpos} }
 
 init:
-| INIT c=cmd { c }
+| INIT c=brace(cmd_seq) { c }
 
 (* Top-level *)
 program:

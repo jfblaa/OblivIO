@@ -1,3 +1,0 @@
-{Alice}
-
-init send({Bob},"HELLO",0);

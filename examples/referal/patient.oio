@@ -1,12 +1,18 @@
-{Patient}
+Patient
 
-declare int<m> result := 100@{Alice};
-declare int<m> appointment := 0@{Clinic};
+channel int@{Doctor} RESULT;
 
+variable obliv int@{Clinic} time := ?0;
 
+variable int@{Doctor} result := 100;
+variable int@{Clinic} appointment := 0;
 
-init send({Doctor},"RESULT",result);
+init {
+  output RESULT(result);
+}
 
-hn ({Clinic},"APPOINTMENT",int<m> time) {
-  appointment := time;
+int@{Clinic} APPOINTMENT(time) {
+  skip;
+} {
+  appointment ?= time;
 }
