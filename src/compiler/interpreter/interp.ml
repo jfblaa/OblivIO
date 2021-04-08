@@ -21,6 +21,7 @@ type prog_config
     ; mutable msg_queue: M.message list
     }
 
+type node_table = (string, prog_config)  H.t
 type channel_table = (string, prog_config)  H.t
 
 exception InterpFatal
@@ -284,34 +285,46 @@ let step_node (ctxt: prog_config) =
   | ProducerState cmd ->
     producer_step ctxt cmd
 
-let rec step_sys time (chtbl:channel_table) nodes =
-  (*print_endline @@ Printf.sprintf " %-*d " 10 time;*)
+let rec step_sys time (ntbl:node_table) (chtbl:channel_table) nodes =
   let f acc node = 
     step_node node @ acc in
   let round_msgs = List.fold_left f [] nodes in
-  let g (adv, (M.Msg{channel;_} as msg)) =
-    begin match adv with
+  let g (adv, (M.Msg{sender;channel;_} as msg)) =
+    let sender_node = H.find ntbl sender in
+    (match adv with
     | Some ladv ->  print_endline @@ 
-      "Time " ^ Int.to_string time ^ ": " ^ M.to_string_at_level msg ladv
-    | None -> () end;
-    match H.find_opt chtbl channel with
-    | None ->
-      print_endline @@ "WARNING: no channel with name" ^ channel
-    | Some node ->
-      begin match node.adv with
+      "Time " ^ Int.to_string time ^ ": " ^ sender ^ " -> " ^ M.to_string_at_level msg ladv
+    | None -> ());
+    (match H.find_opt sender_node.handlers channel, H.find_opt chtbl channel with
+    | None,None ->
+      ()
+    | Some _, _ ->
+      (match sender_node.adv with
       | Some ladv ->  print_endline @@
-        "Time " ^ Int.to_string time ^ ": " ^ M.to_string_at_level msg ladv
-      | None -> () end;
-      node.msg_queue <- node.msg_queue @ [msg] in
+        "Time " ^ Int.to_string time ^ ": " ^ sender_node.node ^ " <- " ^ M.to_string_at_level msg ladv
+      | None -> ())
+    | _,Some node ->
+      (match node.adv with
+      | Some ladv ->  print_endline @@
+        "Time " ^ Int.to_string time ^ ": " ^ node.node ^ " <- " ^ M.to_string_at_level msg ladv
+      | None -> ()));
+    (match H.find_opt sender_node.handlers channel, H.find_opt chtbl channel with
+    | Some _, _ ->
+      sender_node.msg_queue <- sender_node.msg_queue @ [msg]
+    | _, Some node ->
+      node.msg_queue <- node.msg_queue @ [msg]
+    | None,None ->
+      print_endline @@ "WARNING: no channel with name" ^ channel) in
   List.iter g round_msgs;
   let h node =
     match node.state, List.length node.msg_queue with
     | ConsumerState, 0 -> false
     | _ -> true in
   if List.exists h nodes
-  then step_sys (time + 1) chtbl nodes
+  then step_sys (time + 1) ntbl chtbl nodes
 
 let interp (progs: A.program list) =
+  let ntbl = H.create 1024 in
   let chtbl = H.create 1024 in
   let setup (A.Prog{node;adv;decls;init;chs}) =
     let state =
@@ -338,8 +351,9 @@ let interp (progs: A.program list) =
       | (A.ChDecl{name;ty;_}) ->
         let lvl = Types.level ty in
         H.add ctxt.chdecls name lvl in
+    H.add ntbl node ctxt;
     List.iter f chs;
     List.iter g decls;
     ctxt
     in
-  step_sys 0 chtbl @@ List.map setup progs
+  step_sys 0 ntbl chtbl @@ List.map setup progs

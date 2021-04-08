@@ -7,11 +7,9 @@ type packet = Dummy of int | Real of V.value
 type message
   = Msg of {sender: string; channel: string; level: L.level; packet: packet}
 
-let to_string (Msg {sender; channel; packet; _}) =
+let to_string (Msg {channel; packet; _}) =
   String.concat ""
-  [ sender
-  ; " sent "
-  ; channel
+  [ channel
   ; "("
   ; (match packet with
     | Real v -> V.to_string v
@@ -19,11 +17,9 @@ let to_string (Msg {sender; channel; packet; _}) =
   ; ")"
   ]
 
-let to_string_at_level (Msg {sender; channel; level; packet}) ladv =
+let to_string_at_level (Msg {channel; level; packet;_}) ladv =
   String.concat ""
-  [ sender
-  ; " sent "
-  ; channel
+  [ channel
   ; "("
   ; (match packet with
     | Real v when L.flows_to level ladv -> V.to_string v

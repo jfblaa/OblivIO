@@ -1,0 +1,42 @@
+Bob
+
+variable int@{H} n := 0;
+variable int@{H} buffer_empty := 1;
+variable string@{H} buffer := "";
+variable obliv string@{H} msg_in := ?"";
+channel string@{H} CHAT;
+
+string@{H} INPUT(msg_in) {
+    skip;
+} {
+    obliv if buffer_empty
+    then {
+        buffer ?= msg_in;
+        buffer_empty ?= ?0;
+    } else {
+        print("Buffer is full. Try again later.");
+    }
+}
+
+string@{H} CHIT(msg_in) {
+    obliv if buffer_empty
+    then skip;
+    else {
+        output CHAT(buffer);
+        buffer ?= ?"";
+        buffer_empty ?= ?1;
+    }
+} {
+    output DISPLAY(!msg_in);
+}
+
+string@{H} DISPLAY(msg_in) {
+    n := n - 1;
+    obliv if n <= 0
+    then {
+        output INPUT("boop");
+        n ?= ?5;
+    } else skip;
+} {
+    print("Alice wrote",!msg_in);
+}

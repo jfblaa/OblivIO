@@ -1,5 +1,7 @@
 Doctor
 
+@{}
+
 channel int@{Patient,Clinic} REFER;
 
 variable obliv int@{Patient} result := ?0;

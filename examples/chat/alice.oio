@@ -1,0 +1,57 @@
+Alice
+
+@{}
+
+variable int@{} quota := 10;
+
+variable int@{H} n := 0;
+variable int@{H} buffer_empty := 1;
+variable string@{H} buffer := "";
+variable obliv string@{H} msg_in := ?"";
+channel string@{H} CHIT;
+
+init {
+    output INPUT("beep");
+    obliv if 0
+    then output CHAT("");
+    else skip;
+}
+
+string@{H} INPUT(msg_in) {
+    skip;
+} {
+    obliv if buffer_empty
+    then {
+        buffer ?= msg_in;
+        buffer_empty ?= ?0;
+    } else {
+        print("Buffer is full. Try again later.");
+    }
+}
+
+string@{H} CHAT(msg_in) {
+    quota := quota - 1;
+    if quota > 0
+    then {
+        obliv if buffer_empty
+        then skip;
+        else {
+            output CHIT(buffer);
+            buffer ?= ?"";
+            buffer_empty ?= ?1;
+        }
+    } else skip;
+} {
+    output DISPLAY(!msg_in);
+}
+
+string@{H} DISPLAY(msg_in) {
+    n := n - 1;
+    obliv if n <= 0
+    then {
+        output INPUT("beep");
+        n ?= ?3;
+    } else skip;
+} {
+    print("Bob wrote",!msg_in);
+}

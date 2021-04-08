@@ -1,5 +1,7 @@
 Clinic
 
+@{}
+
 channel int@{Doctor} APPOINTMENT;
 
 variable obliv int@{Doctor} patient_id := ?0;
