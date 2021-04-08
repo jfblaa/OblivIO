@@ -1,0 +1,11 @@
+Alice
+
+@{}
+
+variable obliv string@{Alice} result := ?"";
+
+string@{Alice} MATCH(result) {
+  skip;
+} {
+  print("Match found",!result);
+}

@@ -194,41 +194,25 @@ let producer_step (ctxt: prog_config) cmd =
       let thn = ~>(A.SeqCmd{c1=body;c2=cmd}) in
       continue (~> (A.IfCmd{test;thn;els=skipcmd})) []
     | OutputCmd {channel;exp} when phantom ->
-      let level =
-        match H.find_opt ctxt.chdecls channel, H.find_opt ctxt.handlers channel with
-        | Some level, _ -> level
-        | None, Some {ty=Types.Type{level;_};_} -> level
-        | _ ->
-          print_endline @@ "WARNING: node " ^ ctxt.node ^ " is attempting output on undeclared channel " ^ channel;
-          Level.bottom in
       let z =
         match eval ctxt exp with
         | V.Obliv _ -> raise InterpFatal
         | V.Regular (_,z) -> z in
       doneby
-      [ ctxt.adv, M.Msg
+      [ M.Msg
         { sender = ctxt.node
         ; channel
-        ; level
         ; packet = M.Dummy z
         } ]
     | OutputCmd {channel;exp} ->
-      let level =
-        match H.find_opt ctxt.chdecls channel, H.find_opt ctxt.handlers channel with
-        | Some level, _ -> level
-        | None, Some {ty=Types.Type{level;_};_} -> level
-        | _ ->
-          print_endline @@ "WARNING: node " ^ ctxt.node ^ " is attempting output on undeclared channel " ^ channel;
-          Level.bottom in
       let rv =
         match eval ctxt exp with
         | V.Obliv _ -> raise InterpFatal
         | rv -> rv in
       doneby
-      [ ctxt.adv, M.Msg
+      [ M.Msg
         { sender = ctxt.node
         ; channel
-        ; level
         ; packet = M.Real rv
         } ]
     | PrintCmd { info; exp } ->
@@ -285,36 +269,61 @@ let step_node (ctxt: prog_config) =
   | ProducerState cmd ->
     producer_step ctxt cmd
 
+let receiver_node channel sender_node chtbl =
+  match H.find_opt sender_node.handlers channel, H.find_opt chtbl channel with
+  | Some _, _ ->
+    Some sender_node
+  | _, Some node ->
+    Some node
+  | None,None ->
+    print_endline @@ "WARNING: no channel with name" ^ channel;
+    None
+
+let string_of_msg_out cfg (Message.Msg{channel;_} as msg) =
+  match cfg.adv with
+  | None -> None
+  | Some ladv ->
+    let lmsg =
+      match H.find_opt cfg.handlers channel, H.find_opt cfg.chdecls channel with
+      | Some {ty=Types.Type{level;_};_},_ -> level
+      | _, Some level -> level
+      | _ ->
+        print_endline @@ "WARNING: no level declared for channel " ^ channel ^ " at node " ^ cfg.node;
+        L.bottom in
+    if L.flows_to lmsg ladv
+    then Some (cfg.node ^ " -> " ^ M.to_string msg)
+    else Some (cfg.node ^ " -> " ^ M.to_string_hidden msg)
+
+let string_of_msg_in cfg (Message.Msg{channel;_} as msg) =
+  match cfg.adv with
+  | None -> None
+  | Some ladv ->
+    let lmsg =
+      match H.find_opt cfg.handlers channel with
+      | Some {ty=Types.Type{level;_};_} -> level
+      | _ ->
+        print_endline @@ "WARNING: no level declared for channel " ^ channel ^ " at node " ^ cfg.node;
+        L.bottom in
+    if L.flows_to lmsg ladv
+    then Some (cfg.node ^ " <- " ^ M.to_string msg)
+    else Some (cfg.node ^ " <- " ^ M.to_string_hidden msg)
+
 let rec step_sys time (ntbl:node_table) (chtbl:channel_table) nodes =
   let f acc node = 
     step_node node @ acc in
   let round_msgs = List.fold_left f [] nodes in
-  let g (adv, (M.Msg{sender;channel;_} as msg)) =
+  let g (M.Msg{sender;channel;_} as msg) =
     let sender_node = H.find ntbl sender in
-    (match adv with
-    | Some ladv ->  print_endline @@ 
-      "Time " ^ Int.to_string time ^ ": " ^ sender ^ " -> " ^ M.to_string_at_level msg ladv
+    let channel_node = Option.get @@ receiver_node channel sender_node chtbl in
+    (match string_of_msg_out sender_node msg with
+    | Some s ->
+      print_endline @@  "Time " ^ Int.to_string time ^ ": " ^ s
     | None -> ());
-    (match H.find_opt sender_node.handlers channel, H.find_opt chtbl channel with
-    | None,None ->
-      ()
-    | Some _, _ ->
-      (match sender_node.adv with
-      | Some ladv ->  print_endline @@
-        "Time " ^ Int.to_string time ^ ": " ^ sender_node.node ^ " <- " ^ M.to_string_at_level msg ladv
-      | None -> ())
-    | _,Some node ->
-      (match node.adv with
-      | Some ladv ->  print_endline @@
-        "Time " ^ Int.to_string time ^ ": " ^ node.node ^ " <- " ^ M.to_string_at_level msg ladv
-      | None -> ()));
-    (match H.find_opt sender_node.handlers channel, H.find_opt chtbl channel with
-    | Some _, _ ->
-      sender_node.msg_queue <- sender_node.msg_queue @ [msg]
-    | _, Some node ->
-      node.msg_queue <- node.msg_queue @ [msg]
-    | None,None ->
-      print_endline @@ "WARNING: no channel with name" ^ channel) in
+    (match string_of_msg_in channel_node msg with
+    | Some s ->
+      print_endline @@ "Time " ^ Int.to_string time ^ ": " ^ s
+    | None -> ());
+    channel_node.msg_queue <- channel_node.msg_queue @ [msg] in
   List.iter g round_msgs;
   let h node =
     match node.state, List.length node.msg_queue with

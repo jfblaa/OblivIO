@@ -1,0 +1,15 @@
+Bob
+
+@{Bob}
+
+channel string@{Bob} NAME;
+channel string@{Bob} INTEREST;
+channel int@{} DONE;
+
+init {
+  output NAME("Bob");
+  output INTEREST("fishing");
+  output INTEREST("cats");
+  output INTEREST("compilers");
+  output DONE(0);
+}

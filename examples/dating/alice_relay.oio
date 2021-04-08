@@ -1,0 +1,40 @@
+Relay
+
+@{}
+
+variable string@{Alice} condition := "cats";
+
+variable string@{Alice} result := "";
+
+variable obliv int@{} ignored := ?0;
+
+variable obliv string@{Alice} name := ?"";
+variable obliv int@{Alice} age := ?0;
+variable obliv string@{Alice} interest := ?"";
+
+variable int@{Alice} match := 0;
+
+channel string@{Alice} MATCH;
+
+string@{Alice} NAME(name) {
+  skip;
+} {
+  result ?= ?(result ^ !name);
+}
+
+string@{Alice} INTEREST(interest) {
+  skip;
+} {
+  obliv if !interest = condition
+  then match ?= ?1;
+  else skip;
+  result ?= ?(result ^ "; " ^ !interest);
+}
+
+int@{} DONE(ignored) {
+  skip;
+} {
+  obliv if match
+  then output MATCH(result);
+  else skip;
+}
