@@ -62,6 +62,11 @@ let op oper (v1,s1) (v2,s2) =
     IntVal(if String.equal a b then 0 else 1), 1
   | O.ConcatOp,V.StringVal a,V.StringVal b ->
     V.StringVal(a^b), s1+s2
+  | O.ConcatOp,V.StringVal a,V.IntVal b ->
+    let b' = Int.to_string b in
+    let maxb = Int.to_string @@ Int.of_float @@ 2. ** (Int.to_float s2) in
+    let s2' = V.size_of_base @@ V.StringVal maxb in
+    V.StringVal(a^b'), s1+s2'
   | _ -> raise InterpFatal
 
 let _int v =

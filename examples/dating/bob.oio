@@ -3,11 +3,13 @@ Bob
 @{Bob}
 
 channel string@{Bob} NAME;
+channel int@{Bob} AGE;
 channel string@{Bob} INTEREST;
 channel int@{} DONE;
 
 init {
   output NAME("Bob");
+  output AGE(27);
   output INTEREST("fishing");
   output INTEREST("cats");
   output INTEREST("compilers");

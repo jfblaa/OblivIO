@@ -143,7 +143,7 @@ let transExp ({err;_} as ctxt) =
           Ty.INT
         | ConcatOp ->
           checkString lty err pos;
-          checkString rty err pos;
+          checkNonObliv rty err pos;
           Ty.STRING in
       OpExp{left;oper;right} ^! Ty.Type{base;level}
   in trexp

@@ -2,6 +2,8 @@ Relay
 
 @{}
 
+variable int@{Alice} min_age := 25;
+variable int@{Alice} max_age := 35;
 variable string@{Alice} condition := "cats";
 
 variable string@{Alice} result := "";
@@ -12,7 +14,7 @@ variable obliv string@{Alice} name := ?"";
 variable obliv int@{Alice} age := ?0;
 variable obliv string@{Alice} interest := ?"";
 
-variable int@{Alice} match := 0;
+variable int@{Alice} score := 0;
 
 channel string@{Alice} MATCH;
 
@@ -22,11 +24,20 @@ string@{Alice} NAME(name) {
   result ?= ?(result ^ !name);
 }
 
+int@{Alice} AGE(age) {
+  skip;
+} {
+  obliv if min_age <= !age and !age <= max_age
+  then score ?= ?(score + 1);
+  else skip;
+  result ?= ?(result ^ "; " ^ !age);
+}
+
 string@{Alice} INTEREST(interest) {
   skip;
 } {
   obliv if !interest = condition
-  then match ?= ?1;
+  then score ?= ?(score + 1);
   else skip;
   result ?= ?(result ^ "; " ^ !interest);
 }
@@ -34,7 +45,7 @@ string@{Alice} INTEREST(interest) {
 int@{} DONE(ignored) {
   skip;
 } {
-  obliv if match
+  obliv if score >= 2
   then output MATCH(result);
   else skip;
 }
