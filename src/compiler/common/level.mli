@@ -1,7 +1,3 @@
-(**************************************************************************)
-(* AU Compilation. Assignment submissions must not modify this file       *)
-(**************************************************************************)
-
 type level
 
 val bottom: level

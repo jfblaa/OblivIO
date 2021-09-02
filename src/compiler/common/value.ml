@@ -1,30 +1,37 @@
 
 type basevalue =
-| StringVal of string
-| IntVal of int
+  | IntVal of int
+  | StringVal of char array
 
-type value = 
-  | Regular of basevalue * int
-  | Obliv of bool * basevalue * int
+type value = Val of {bit: int; v: basevalue}
 
-let size_of_base = function
-  | IntVal _ -> 64
-  | StringVal s -> 8 * String.length s
-
-let default_base_int =
-  IntVal 0
-
-let default_base_string =
-  StringVal ""
-
-let base_to_string base =
-  match base with
-  | StringVal s -> "\"" ^ s ^ "\""
+let base_to_string = function
+  | StringVal s -> "\"" ^ (s |> Array.to_seq |> String.of_seq) ^ "\""
   | IntVal n -> Int.to_string n
 
-let size_to_string m =
-  "<" ^ Int.to_string m ^ ">"
+let sizeof (Val{v;_}) =
+  match v with
+  | IntVal _ -> 64
+  | StringVal s -> 8 * Array.length s
 
-let to_string = function
-  | Regular (v,z) -> base_to_string v ^ size_to_string z
-  | Obliv (b,v,z) -> "(" ^ Bool.to_string b ^ ", " ^ base_to_string v ^ size_to_string z ^ ")"
+let to_string (Val{bit;v} as v') =
+  String.concat ""
+  [ "{bit:"
+  ; Int.to_string bit
+  ; ", size:"
+  ; Int.to_string @@ sizeof v'
+  ; ", v:"
+  ; base_to_string v
+  ; "}"
+  ]
+
+let to_string_enc (Val{bit;_} as v') =
+  String.concat ""
+  [ "{bit:"
+  ; Int.to_string bit
+  ; ", size:"
+  ; Int.to_string @@ sizeof v'
+  ; ", v:"
+  ; "<#####>"
+  ; "}"
+  ]

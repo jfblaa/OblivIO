@@ -4,7 +4,6 @@ module L = Level
 type basetype = 
   | INT
   | STRING
-  | OBLIV of basetype
   | ERROR
 
 type ty = Type of {base: basetype; level: L.level}

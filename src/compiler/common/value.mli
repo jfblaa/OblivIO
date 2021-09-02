@@ -1,17 +1,12 @@
 
 type basevalue =
-| StringVal of string
-| IntVal of int
+  | IntVal of int
+  | StringVal of char array
 
-type value = 
-  | Regular of basevalue * int
-  | Obliv of bool * basevalue * int
+type value = Val of {bit: int; v: basevalue}
 
-val size_of_base: basevalue -> int
+val sizeof: value -> int
 
-val default_base_int: basevalue
-val default_base_string: basevalue
-
-val to_string: value -> string
 val base_to_string: basevalue -> string
-val size_to_string: int -> string
+val to_string: value -> string
+val to_string_enc: value -> string

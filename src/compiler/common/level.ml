@@ -1,7 +1,3 @@
-(**************************************************************************)
-(* AU Compilation. Assignment submissions must not modify this file       *)
-(**************************************************************************)
-
 module ST = Set.Make(String)
     
 type level = ST.t

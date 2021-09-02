@@ -13,7 +13,8 @@ module H = Hashtbl
 
 type context 
   = { gamma : (string, Ty.ty) H.t
-    ; lambda : (string, Ty.ty) H.t
+    ; pi : (string, Ty.ty) H.t
+    ; lambda : (string * string, Ty.ty) H.t
     ; err :  Err.errorenv 
     }
 ;;
@@ -30,22 +31,27 @@ let lookupVar ({gamma;err;_}) v pos =
   | Some ty -> ty
   | None -> errTy err pos @@ "undeclared variable " ^ v
 
-let lookupCh ({lambda;err;_}) ch pos = 
-  match H.find_opt lambda ch with
+let lookupInternal ({pi;err;_}) ch pos = 
+  match H.find_opt pi ch with
   | Some ty -> ty
-  | None -> errTy err pos @@ "undeclared channel " ^ ch
+  | None -> errTy err pos @@ "undeclared internal channel " ^ ch
+
+let lookupRemote ({lambda;err;_}) node ch pos = 
+  match H.find_opt lambda (node,ch) with
+  | Some ty -> ty
+  | None -> errTy err pos @@ "undeclared remote channel " ^ ch ^ " at node " ^ node
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
 
-let isEqual t1 t2 =
+let isSameBase t1 t2 =
   match Ty.base t1, Ty.base t2 with
   | Ty.ERROR, _ -> true
   | _, Ty.ERROR -> true
   | a, b -> a = b
 
-let checkEqual t1 t2 err pos =
-  if not (isEqual t1 t2)
+let checkBaseType t1 t2 err pos =
+  if not (isSameBase t1 t2)
   then Err.error err pos @@ "type " ^ (Ty.base_to_string @@ Ty.base t1) ^ " not equal to type " ^ (Ty.base_to_string @@ Ty.base t2)
 
 let checkFlow l1 l2 err pos =
@@ -57,45 +63,20 @@ let checkFlowType t1 t2 err pos =
   if not (L.flows_to l1 l2)
   then Err.error err pos @@ "illegal flow from " ^ L.to_string l1 ^ " to " ^ L.to_string l2
 
+let checkFlowTypePC pc t1 t2 err pos =
+    let l1, l2 = Ty.level t1, Ty.level t2 in
+    if not (L.flows_to (L.lub pc l1) l2)
+    then Err.error err pos @@ "illegal flow from " ^ L.to_string l1 ^ " to " ^ L.to_string l2 ^ " at pc " ^ L.to_string pc
+
 let checkComparable t1 t2 err pos =
   match Ty.base t1, Ty.base t2 with
   | Ty.INT, Ty.INT -> ()
   | Ty.STRING, Ty.STRING -> ()
   | b1, b2 -> Err.error err pos @@ "types " ^ Ty.base_to_string b1 ^ " and " ^ Ty.base_to_string b2 ^ " do not match"
 
-let checkLowPc pc v err pos =
+let checkLowPC pc err pos =
   if not (L.flows_to pc L.bottom)
-  then Err.error err pos @@ "assignment to non-obliv variable " ^ v ^ " only allowed under low pc" 
-
-let isNonObliv t =
-  match Ty.base t with
-  | (Ty.OBLIV _) -> false
-  | _ -> true
-
-let checkObliv t err pos =
-  match Ty.base t with
-  | (Ty.OBLIV _) -> ()
-  | b -> Err.error err pos @@ "obliv type required, " ^ Ty.base_to_string b ^ " provided"
-
-let checkNonObliv t err pos =
-  match Ty.base t with
-  | (Ty.OBLIV _) as b -> Err.error err pos @@ "non-obliv type required, " ^ Ty.base_to_string b ^ " provided"
-  | _ -> ()
-
-let toObliv t err pos =
-  checkNonObliv t err pos;
-  let level = Ty.level t in
-  let base = Ty.OBLIV (Ty.base t) in
-  Ty.Type{base;level}
-
-let fromObliv t err pos =
-  checkObliv t err pos;
-  let level = Ty.level t in
-  let base =
-    match Ty.base t with
-    | Ty.OBLIV t -> t
-    | _ -> Ty.ERROR in
-  Ty.Type{base;level}
+  then Err.error err pos @@ "pc must be low"
 
 let checkInt t err pos =
   match Ty.base t with
@@ -118,16 +99,12 @@ let transExp ({err;_} as ctxt) =
     | VarExp v ->
       let ty = lookupVar ctxt v pos in
       VarExp (v, ty) ^! ty
-    | ProjExp e ->
-      let (e,ety) = e_ty @@ trexp e in
-      ProjExp e ^! fromObliv ety err pos
-    | InjExp e ->
-      let (e,ety) = e_ty @@ trexp e in
-      InjExp e ^! toObliv ety err pos
     | SizeExp e ->
-      let e,ety = e_ty @@ trexp e in
-      checkNonObliv ety err pos;
+      let e = trexp e in
       SizeExp e ^! _bot Ty.INT
+    | QuestionExp e ->
+      let (e,ety) = e_ty @@ trexp e in
+      QuestionExp e ^! Ty.Type{base=Ty.INT; level=Ty.level ety}
     | OpExp {left;oper;right} ->
       let (left,lty) = e_ty @@ trexp left in
       let (right,rty) = e_ty @@ trexp right in
@@ -140,11 +117,7 @@ let transExp ({err;_} as ctxt) =
           Ty.INT
         | EqOp | NeqOp ->
           checkComparable lty rty err pos;
-          Ty.INT
-        | ConcatOp ->
-          checkString lty err pos;
-          checkNonObliv rty err pos;
-          Ty.STRING in
+          Ty.INT in
       OpExp{left;oper;right} ^! Ty.Type{base;level}
   in trexp
 
@@ -160,26 +133,30 @@ let transCmd ({err;_} as ctxt) =
     | AssignCmd {var;exp} ->
       let varty = lookupVar ctxt var pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      if isNonObliv varty
-      then checkLowPc pc var err pos;
-      checkEqual ety varty err pos;
+      checkLowPC pc err pos;
+      checkBaseType ety varty err pos;
       checkFlowType ety varty err pos;
       fromBase @@ AssignCmd{var=(var,varty);exp=e}
-    | OblivAssignCmd {var;exp} ->
+    | BindCmd {var;exp} ->
       let varty = lookupVar ctxt var pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkNonObliv varty err pos;
-      let ety' = fromObliv ety err pos in
-      checkEqual ety' varty err pos;
-      checkFlowType ety' varty err pos;
-      fromBase @@ OblivAssignCmd{var=(var,varty);exp=e}
-    | OutputCmd {channel;exp} ->
-      let chty = lookupCh ctxt channel pos in
+      checkBaseType ety varty err pos;
+      checkFlowTypePC pc ety varty err pos;
+      fromBase @@ BindCmd{var=(var,varty);exp=e}
+    | InputCmd {var;ch;size} ->
+      let varty = lookupVar ctxt var pos in
+      let chty = lookupInternal ctxt ch pos in
+      let size,sizety = e_ty @@ transExp ctxt size in
+      checkBaseType chty varty err pos;
+      checkFlowTypePC pc chty varty err pos;
+      checkInt sizety err pos;
+      fromBase @@ InputCmd{var=(var,varty);ch;size}
+    | SendCmd {node;channel;exp} ->
+      let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkNonObliv ety err pos;
-      checkEqual ety chty err pos;
-      checkFlowType ety chty err pos;
-      fromBase @@ OutputCmd{channel;exp=e}
+      checkBaseType ety chty err pos;
+      checkFlowTypePC pc ety chty err pos;
+      fromBase @@ SendCmd{node;channel;exp=e}
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
@@ -187,23 +164,20 @@ let transCmd ({err;_} as ctxt) =
       let thn = trcmd pc thn in
       let els = trcmd pc els in
       fromBase @@ IfCmd{test;thn;els}
-    | OblivIfCmd{test;thn;els} ->
-      let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
-      checkInt testty err pos;
-      let thn = trcmd (L.lub pc testlvl) thn in
-      let els = trcmd (L.lub pc testlvl) els in
-      fromBase @@ OblivIfCmd{test;thn;els}
     | WhileCmd{test;body} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
       let body = trcmd pc body in
       fromBase @@ WhileCmd{test;body}
-    | PhantomCmd c ->
-      fromBase @@ PhantomCmd (trcmd pc c)
+    | OblivIfCmd{test;thn;els} ->
+      let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
+      checkInt testty err pos;
+      let thn = trcmd (L.lub pc testlvl) thn in
+      let els = trcmd (L.lub pc testlvl) els in
+      fromBase @@ OblivIfCmd{test;thn;els}
     | PrintCmd {info;exp} ->
-      let exp,ety = e_ty @@transExp ctxt exp in
-      checkNonObliv ety err pos;
+      let exp = transExp ctxt exp in
       fromBase @@ PrintCmd{info;exp}
   in trcmd
 
@@ -212,43 +186,53 @@ let transTy ty =
   match ty with
   | A.IntType level -> Ty.INT ^! level
   | A.StringType level -> Ty.STRING ^! level
-  | A.OblivIntType level -> (Ty.OBLIV Ty.INT) ^! level
-  | A.OblivStringType level -> (Ty.OBLIV Ty.STRING) ^! level
 
-let transCh ({err;_} as ctxt) (A.Ch{ty;name;var;prelude;body;pos}) =
+let transCh ({err;_} as ctxt) (A.Ch{ty;ch;var;body;pos}) =
   let ty = transTy ty in
-  let oblivty = toObliv ty err pos in
   let varty = lookupVar ctxt var pos in
-  checkEqual oblivty varty err pos;
-  checkFlowType oblivty varty err pos; checkFlowType varty oblivty err pos;
-  let prelude = transCmd ctxt L.bottom prelude in
-  let body = transCmd ctxt (Ty.level ty) body in
-  Ch{ty;name;var=(var,varty);prelude;body;pos}
+  checkBaseType ty varty err pos;
+  checkFlowType ty varty err pos;
+  checkFlowType varty ty err pos;
+  let body = transCmd ctxt L.bottom body in
+  Ch{ty;ch;var=(var,varty);body;pos}
 
-let transDecl ({gamma;lambda;err} as ctxt) dec =
+let transDecl ({gamma;pi;lambda;err} as ctxt) dec =
   match dec with
-  | A.VarDecl {ty;var;init;pos} ->
+  | A.VarDecl {ty;var;init;padding;pos} ->
     let ty = transTy ty in
     H.add gamma var ty;
     let init,initty = e_ty @@ transExp ctxt init in
-    checkEqual initty ty err pos;
+    checkBaseType initty ty err pos;
     checkFlowType initty ty err pos;
-    VarDecl{var=(var,ty);init;pos}
-  | A.ChDecl {ty;name;pos} ->
+    begin
+    match padding with
+    | Some pad -> 
+      let pad,padty = e_ty @@ transExp ctxt pad in
+      checkBaseType padty ty err pos;
+      checkFlowType padty ty err pos;
+      VarDecl{var=(var,ty);init;padding=Some(pad);pos}
+    | None ->
+      VarDecl{var=(var,ty);init;padding=None;pos}
+    end
+  | A.InternalDecl {ty;ch;pos} ->
+      let ty = transTy ty in
+      H.add pi ch ty;
+      InternalDecl{ch;ty;pos}
+  | A.RemoteDecl {ty;node;ch;pos} ->
     let ty = transTy ty in
-    H.add lambda name ty;
-    ChDecl{name;ty;pos}
+    H.add lambda (node,ch) ty;
+    RemoteDecl{node;ch;ty;pos}
 
-let transProg (A.Prog{node;adv;decls;init;chs}) =
+let transProg (A.Prog{node;decls;chs}) =
   let ctxt = 
     { gamma = H.create 1024
+    ; pi = H.create 1024
     ; lambda = H.create 1024
     ; err = Err.initial_env
     } in
-  let enter (A.Ch{ty;name;_}) =
-    H.add ctxt.lambda name (transTy ty) in
-  List.iter enter chs;
+  (*let enter (A.Ch{ty;node;ch;_}) =
+    H.add ctxt.lambda (node,ch) (transTy ty) in
+  List.iter enter chs;*)
   let decls = List.map (transDecl ctxt) decls in
-  let init = Option.map (transCmd ctxt L.bottom) init in
   let chs = List.map (transCh ctxt) chs in
-  not (Err.any_errors ctxt.err), Prog{node;adv;decls;init;chs}
+  not (Err.any_errors ctxt.err), Prog{node;decls;chs}

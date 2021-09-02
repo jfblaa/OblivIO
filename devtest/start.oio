@@ -1,0 +1,7 @@
+Alice
+
+variable int@{} ignored := 0;
+
+int@{} START(ignored) {
+    print("Alice","I have received the START message!");
+}

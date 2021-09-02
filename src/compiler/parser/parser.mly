@@ -1,9 +1,3 @@
-(**************************************************************************)
-(* AU compilation.                                                        *)
-(* Skeleton file -- expected to be modified as part of the assignment     *)
-(* Do not distribute                                                      *)
-(**************************************************************************)
-
 %{
   open Common.Absyn
   module Level = Common.Level
@@ -13,21 +7,20 @@
 %token <string> ID
 %token <int> INT
 %token <string> STRING
-%token VAR CH INIT
+%token VAR INTERNAL REMOTE
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
-%token PLUS MINUS EQ NEQ LT LE GT GE CARET
-%token PROJECT INJECT SIZE
-%token AND OR ASSIGN OBLIVASSIGN IF THEN ELSE WHILE DO
-%token SKIP OBLIV OUTPUT AT PRINT
+%token PLUS MINUS EQ NEQ LT LE GT GE
+%token QMARK SIZE SLASH AT PRINT
+%token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
+%token SKIP OBLIV SEND INPUT
 %token INTTYPE STRINGTYPE
 
 %left OR
 %left AND
 %nonassoc EQ NEQ GT LT GE LE
 %left PLUS MINUS 
-%left CARET
-%nonassoc UMINUS PROJECT INJECT
+%nonassoc UMINUS QMARK
 
 %start <Common.Absyn.program> program  
 (* Observe that we need to use fully qualified types for the start symbol *)
@@ -52,7 +45,6 @@
 | LE      { LeOp }
 | GT      { GtOp }
 | GE      { GeOp }
-| CARET   { ConcatOp }
 
 binop_exp:
 | MINUS right=exp %prec UMINUS
@@ -71,8 +63,7 @@ exp_base:
 | i=INT             { IntExp i }
 | s=STRING          { StringExp s }
 | x=ID              { VarExp x }
-| PROJECT e=exp     { ProjExp e }
-| INJECT e=exp      { InjExp e }
+| QMARK e=exp       { QuestionExp e }
 | SIZE e=paren(exp) { SizeExp e }
 | e=binop_exp       { e }
 
@@ -89,8 +80,8 @@ cmd_base_seq:
 cmd_base:
 | v=var ASSIGN e=exp SEMICOLON
   { AssignCmd{var=v; exp=e} }
-| v=var OBLIVASSIGN e=exp SEMICOLON
-  { OblivAssignCmd{var=v; exp=e} }
+| v=var BIND e=exp SEMICOLON
+  { BindCmd{var=v; exp=e} }
 | SKIP SEMICOLON
   { SkipCmd }
 | IF test=exp THEN thn=cmd ELSE els=cmd
@@ -99,8 +90,10 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
-| OUTPUT channel=ID exp=paren(exp) SEMICOLON
-  { OutputCmd{channel;exp} }
+| v=var ASSIGN INPUT RPAREN ch=ID COMMA size=exp RPAREN SEMICOLON
+  { InputCmd {var=v;ch;size} }
+| SEND LPAREN node=ID SLASH channel=ID COMMA exp=exp RPAREN SEMICOLON
+  { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
 
@@ -117,28 +110,20 @@ cmd:
 type_anno:
 | INTTYPE AT lvl=lvl            { IntType lvl }
 | STRINGTYPE AT lvl=lvl         { StringType lvl }
-| OBLIV INTTYPE AT lvl=lvl      { OblivIntType lvl }
-| OBLIV STRINGTYPE AT lvl=lvl   { OblivStringType lvl }
 
 decl:
-| VAR ty=type_anno var=var ASSIGN init=exp SEMICOLON
-  { VarDecl {ty; var; init; pos=$startpos} }
-| VAR ty=type_anno var=var OBLIVASSIGN init=exp SEMICOLON
-  { VarDecl {ty; var; init; pos=$startpos} }
-| CH ty=type_anno name=ID SEMICOLON
-  { ChDecl {ty; name; pos=$startpos} }
+| VAR ty=type_anno var=var ASSIGN init=exp padding=ioption(preceded(BIND,exp)) SEMICOLON
+  { VarDecl {ty; var; init; padding; pos=$startpos} }
+| INTERNAL ty=type_anno ch=ID SEMICOLON
+  { InternalDecl {ty; ch; pos=$startpos} }
+| REMOTE ty=type_anno node=ID SLASH ch=ID SEMICOLON
+  { RemoteDecl {ty; node; ch; pos=$startpos} }
 
 ch:
-| ty=type_anno name=ID var=paren(var) prelude=brace(cmd_seq) body=brace(cmd_seq)
-  { Ch {ty;name;var;prelude;body;pos=$startpos} }
-
-init:
-| INIT c=brace(cmd_seq) { c }
-
-attacker:
-| AT lvl=lvl { lvl }
+| ty=type_anno ch=ID var=paren(var) body=brace(cmd_seq)
+  { Ch {ty;ch;var;body;pos=$startpos} }
 
 (* Top-level *)
 program:
-| node=ID adv=attacker? decls=decl* init=init? chs=ch* EOF
-  { Prog {node;adv;decls;init;chs} }
+| node=ID decls=decl* chs=ch* EOF
+  { Prog {node;decls;chs} }

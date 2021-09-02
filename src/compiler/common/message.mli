@@ -1,10 +1,7 @@
 module V = Value
-module Ty = Types
-
-type packet = Dummy of int | Real of V.value
+module L = Level
 
 type message
-  = Msg of {sender: string; channel: string; packet: packet}
+  = Msg of {sender: string; receiver: string; channel: string; level: L.level; value: V.value}
 
-val to_string: message -> string
-val to_string_hidden: message -> string
+val to_string_at_level: message -> L.level -> string

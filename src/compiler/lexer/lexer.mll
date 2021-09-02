@@ -28,34 +28,33 @@ rule token = parse
 | ']'                 { RBRACK }
 | '+'                 { PLUS }
 | '-'                 { MINUS }
-| '^'                 { CARET }
 | "="                 { EQ }
 | "<>"                { NEQ }
 | "<="                { LE }
 | ">="                { GE }
 | '<'                 { LT }
 | '>'                 { GT }
-| '!'                 { PROJECT }
-| '?'                 { INJECT }
+| '?'                 { QMARK }
 | "and"               { AND }
 | "or"                { OR }
 | '@'                 { AT }
 | ":="                { ASSIGN }
-| "?="                { OBLIVASSIGN }
+| "?="                { BIND }
 | "variable"          { VAR }
-| "channel"           { CH }
-| "init"              { INIT }
+| "internal"          { INTERNAL }
+| "remote"            { REMOTE }
 | "size"              { SIZE }
 | "obliv"             { OBLIV }
 | "if"                { IF }
 | "then"              { THEN }
 | "else"              { ELSE }
-| "output"            { OUTPUT }
+| "send"              { SEND }
 | "while"             { WHILE }
 | "do"                { DO }
 | "skip"              { SKIP }
 | "int"               { INTTYPE }
 | "string"            { STRINGTYPE }
+| "input"             { INPUT }
 | "print"             { PRINT }
 | "//" nonnewline* '\n' { Lexing.new_line lexbuf; token lexbuf }
 | digit+ as i         { match int_of_string_opt i with
@@ -63,7 +62,8 @@ rule token = parse
                         | None -> error lexbuf "Integer too large" }
 | digit+ idchar+ as l { error lexbuf @@ "Invalid literal '" ^ l ^ "'" }
 | "_" idchar+         { error lexbuf "Invalid identifier, id cannot start with '_'" }
-| letter idchar* as id  { ID (id) }
+| letter idchar* as id  { ID id }
+| '/'                 { SLASH }
 | '\"'                { let start_p = lexbuf.lex_start_p in
                         let str = string "" lexbuf in
                         lexbuf.lex_start_p <- start_p;

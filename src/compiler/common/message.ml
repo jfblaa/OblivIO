@@ -1,29 +1,19 @@
 module V = Value
-module Ty = Types
-
-type packet = Dummy of int | Real of V.value
+module L = Level
 
 type message
-  = Msg of {sender: string; channel: string; packet: packet}
+  = Msg of {sender: string; receiver: string; channel: string; level: L.level; value: V.value}
 
-let to_string (Msg {channel; packet; _}) =
-  String.concat ""
-  [ channel
-  ; "("
-  ; (match packet with
-    | Real v -> V.to_string v
-    | Dummy z -> "N/A" ^ V.size_to_string z)
-  ; ")"
-  ]
-
-let to_string_hidden (Msg {channel; packet;_}) =
-  String.concat ""
-  [ channel
-  ; "("
-  ; (match packet with
-    | Real (V.Regular (_,z)) -> "---" ^ V.size_to_string z
-    | Real (V.Obliv (_,_,z)) -> "---" ^ V.size_to_string z
-    | Dummy z -> "---" ^ V.size_to_string z)
-  ; ")"
+let to_string_at_level (Msg {sender;receiver;channel;level;value}) lvl =
+  String.concat " "
+  [ sender
+  ; "sends"
+  ; if L.flows_to level lvl
+    then V.to_string value
+    else V.to_string_enc value
+  ; "to"
+  ; receiver
+  ; "on channel"
+  ; channel
   ]
 

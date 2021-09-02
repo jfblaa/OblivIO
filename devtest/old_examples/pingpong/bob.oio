@@ -1,5 +1,10 @@
-{Bob}
+BOB
 
-hn ({Alice},"PING",int<m> v) {
-  send({Alice},"PONG",v+1);
+variable int@{H} x := 0;
+
+remote int@{H} ALICE/PING;
+
+int@{H} PONG(x) {
+  print("Received", x);
+  send(ALICE/PING,x+1);
 }
