@@ -1,10 +1,16 @@
-{Clinic}
+Clinic
 
-declare int<m> next_slot := 42@{Patient};
+@{}
 
+channel int@{Doctor} APPOINTMENT;
 
+variable obliv int@{Doctor} patient_id := ?0;
 
-hn ({Doctor},"REFER",int<m> patient_id) {
-  send({Patient},"APPOINTMENT",next_slot);
-  next_slot := next_slot + 1;
+variable int@{Doctor} next_slot := 42;
+
+int@{Doctor} REFER(patient_id) {
+  skip;
+} {
+  output APPOINTMENT(next_slot);
+  next_slot ?= ?(next_slot + 1);
 }

@@ -51,6 +51,28 @@ let lookup m x =
   | Some v -> v
   | None -> raise @@ InterpFatal ("lookup")
 
+let safeConcat (arr1 : char array) (arr2 : char array) =
+  let l1 = Array.length arr1 in
+  let l2 = Array.length arr2 in
+  let len = l1 + l2 in
+  let res = Array.make len '\000' in
+  let idx = ref 0 in
+  let c = ref 0 in
+  for i = 0 to len-1 do
+    if i < l1
+    then c := Char.code @@ arr1.(i);
+    for j = 0 to l2-1 do
+      let v = Char.code @@ arr2.(j) in
+      let c' = Bool.to_int (j = !idx) land Bool.to_int (!c = 0) in
+      idx := !idx + Bool.to_int (c' <> 0);
+      c := !c lor (v*c')
+    done;
+    res.(i) <- Char.chr !c;
+    c := 0
+  done;
+  res
+  
+
 let safeBind (bit : int) (orig : char array) (upd : char array) =
   let len, padded_orig, padded_upd =
     match Array.length orig, Array.length upd with
@@ -66,8 +88,8 @@ let safeBind (bit : int) (orig : char array) (upd : char array) =
         l1, orig, upd in
   let res = Array.make len '\000' in
   for i = 0 to len-1 do
-    let i1 = (1 lxor bit) * (Char.code @@ padded_orig.(i)) in
-    let i2 = bit * (Char.code @@ padded_upd.(i)) in
+    let i1 = (1 lxor bit) land (Char.code @@ padded_orig.(i)) in
+    let i2 = bit land (Char.code @@ padded_upd.(i)) in
     res.(i) <- Char.chr @@ i1 lor i2
   done;
   res
@@ -120,6 +142,8 @@ let op oper v1 v2 =
     IntVal (safeEq a b)
   | NeqOp, StringVal a, StringVal b ->
     IntVal ((safeEq a b) lxor 1)
+  | CaretOp, StringVal a, StringVal b ->
+    StringVal (safeConcat a b)
   | _ -> raise @@ NotImplemented "binop"
 
 let eval {mem;_} =
@@ -164,12 +188,13 @@ let interpCmd ctxt =
       let bit,v =
         match orig,upd with
         | Val{bit=b1;v=IntVal i1}, Val{bit=b2;v=IntVal i2} ->
-          let bit = ((mode lxor 1)*b1) lor (mode*b2) in
-          let i = ((mode lxor 1)*i1) lor (mode*i2) in
+          let bit = ((mode lxor 1) land) lor (mode land b2) in
+          let mode = mode land b2 in
+          let i = ((mode lxor 1) land i1) lor (mode land i2) in
           bit, IntVal i
         | Val{bit=b1;v=StringVal s1}, Val{bit=b2;v=StringVal s2} ->
-          let bit = ((mode lxor 1)*b1) lor (mode*b2) in
-          let s = safeBind mode s1 s2 in
+          let bit = ((mode lxor 1) land b1) lor (mode land b2) in
+          let s = safeBind (mode land b2) s1 s2 in
           bit, StringVal s
         | _ -> raise @@ InterpFatal ("type mismatch during bind") in
       H.add ctxt.mem x (Val{bit;v})
@@ -204,7 +229,7 @@ let interpCmd ctxt =
         | IntVal 0 -> 0
         | _ -> 1 in
       let mode = getMode () in
-      ctxt.mode <- i*mode :: (i lxor 1)*mode :: ctxt.mode;
+      ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
       let (~>) cmd_base = A.Cmd{cmd_base;pos} in
       let _S c1 c2 = A.Cmd{cmd_base=A.SeqCmd{c1;c2};pos} in
       let cmd' = _S thn @@ _S (~> A.PopCmd) @@ _S els (~> A.PopCmd) in
@@ -225,23 +250,6 @@ let interpCmd ctxt =
       if mode land bit = 1 then print_endline @@ "(" ^ ctxt.name ^ ") " ^ intro ^ base_to_string v;
       in
   _I
-
-(*let dummy_node =
-  { name = "dummy"
-  ; message_queue = 
-    { lock = Mutex.create ()
-    ; queue = []
-    }
-  ; input_queue = 
-    { lock = Mutex.create ()
-    ; queue = []
-    }
-  ; mode = []
-  ; mem = H.create 1024
-  ; handlers = H.create 1024
-  ; trust_map = H.create 1024
-  ; network = H.create 1024
-  }*)
 
 let rec loop ctxt =
   let _ = match dequeue ctxt.message_queue with
@@ -298,55 +306,3 @@ let interp (progs: A.program list) =
   List.iter (fun ctxt -> enqueue ctxt.message_queue startMsg) ctxts;
   T.delay 10.0;
   ()
-
-  (*
-let dummy_node =
-  { name = "dummy"
-  ; message_queue = 
-    { lock = Mutex.create ()
-    ; queue = []
-    }
-  ; input_queue = 
-    { lock = Mutex.create ()
-    ; queue = []
-    }
-  ; mode = []
-  ; mem = H.create 1024
-  ; handlers = H.create 1024
-  ; trust_map = H.create 1024
-  ; network = H.create 1024
-  }
-
-  let start = Sys.time()
-
-let producer x =
-  let bit = 1 in
-  let arr1 = Array.make 5 @@ Char.chr (97+x) in
-  let arr2 = Array.make 10 @@ Char.chr (65+x) in
-  let updbit = Random.int 2 in
-  let arr = safeBind updbit arr1 arr2 in
-  let v = StringVal arr in
-  let value = Val{bit;v} in
-  let msg = M.Msg{sender="A";receiver="B";channel="TEST";level=L.bottom;value} in
-  enqueue dummy_node.message_queue msg
-
-let continue = ref true
-let consumer () = 
-  let rec consume () =
-    (match dequeue dummy_node.message_queue with
-    | Some msg ->
-      let timestr = Float.to_string @@ Sys.time() -. start |> fun x -> x ^ " " in
-      print_endline @@ timestr ^ M.to_string_at_level msg L.bottom
-    | None -> ());
-    T.yield ();
-    if !continue then consume () in
-  consume ()
-
-let interp _ =
-  print_endline "interperter starting...";
-  for i = 0 to 5 do
-    ignore(T.create producer i)
-  done;
-  let _ = T.create consumer () in
-  T.delay 1.0;
-  continue := false*)

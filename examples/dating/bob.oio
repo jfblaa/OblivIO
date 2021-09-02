@@ -1,17 +1,17 @@
-Bob
+BOB
 
-@{Bob}
+variable int@{} ignored := 0;
 
-channel string@{Bob} NAME;
-channel int@{Bob} AGE;
-channel string@{Bob} INTEREST;
-channel int@{} DONE;
+remote string@{Bob} RELAY/NAME;
+remote int@{Bob} RELAY/AGE;
+remote string@{Bob} RELAY/INTEREST;
+remote int@{} RELAY/DONE;
 
-init {
-  output NAME("Bob");
-  output AGE(27);
-  output INTEREST("fishing");
-  output INTEREST("cats");
-  output INTEREST("compilers");
-  output DONE(0);
+int@{} START(ignored){
+  send(RELAY/NAME,"Bob");
+  send(RELAY/AGE,27);
+  send(RELAY/INTEREST,"fishing");
+  send(RELAY/INTEREST,"cats");
+  send(RELAY/INTEREST,"compilers");
+  send(RELAY/DONE,0);
 }

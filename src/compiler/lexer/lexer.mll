@@ -34,6 +34,7 @@ rule token = parse
 | ">="                { GE }
 | '<'                 { LT }
 | '>'                 { GT }
+| '^'                 { CARET }
 | '?'                 { QMARK }
 | "and"               { AND }
 | "or"                { OR }

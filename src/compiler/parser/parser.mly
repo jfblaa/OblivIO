@@ -10,7 +10,7 @@
 %token VAR INTERNAL REMOTE
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
-%token PLUS MINUS EQ NEQ LT LE GT GE
+%token PLUS MINUS EQ NEQ LT LE GT GE CARET
 %token QMARK SIZE SLASH AT PRINT
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIV SEND INPUT
@@ -19,8 +19,9 @@
 %left OR
 %left AND
 %nonassoc EQ NEQ GT LT GE LE
-%left PLUS MINUS 
+%left PLUS MINUS
 %nonassoc UMINUS QMARK
+%right CARET
 
 %start <Common.Absyn.program> program  
 (* Observe that we need to use fully qualified types for the start symbol *)
@@ -45,6 +46,7 @@
 | LE      { LeOp }
 | GT      { GtOp }
 | GE      { GeOp }
+| CARET   { CaretOp }
 
 binop_exp:
 | MINUS right=exp %prec UMINUS

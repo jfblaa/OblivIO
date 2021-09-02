@@ -117,7 +117,11 @@ let transExp ({err;_} as ctxt) =
           Ty.INT
         | EqOp | NeqOp ->
           checkComparable lty rty err pos;
-          Ty.INT in
+          Ty.INT 
+        | CaretOp -> 
+          checkString lty err pos;
+          checkString rty err pos;
+          Ty.STRING in
       OpExp{left;oper;right} ^! Ty.Type{base;level}
   in trexp
 

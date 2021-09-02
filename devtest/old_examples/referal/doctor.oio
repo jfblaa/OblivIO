@@ -1,11 +1,17 @@
-{Doctor}
+Doctor
 
-declare int<m> patient_id := 123@{Clinic};
+@{}
 
+channel int@{Patient,Clinic} REFER;
 
+variable obliv int@{Patient} result := ?0;
 
-hn ({Patient},"RESULT",int<m> result) {
-  obliv if result > 50
-  then send({Clinic},"REFER",patient_id);
+variable int@{Patient} patient_id := 123;
+
+int@{Patient} RESULT(result) {
+  skip;
+} {
+  obliv if !result > 50
+  then output REFER(patient_id);
   else skip;
 }
