@@ -13,7 +13,7 @@
 %token PLUS MINUS EQ NEQ LT LE GT GE CARET
 %token QMARK SIZE SLASH AT PRINT
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
-%token SKIP OBLIV SEND INPUT
+%token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
 
 %left OR
@@ -24,7 +24,6 @@
 %right CARET
 
 %start <Common.Absyn.program> program  
-(* Observe that we need to use fully qualified types for the start symbol *)
 
 %%
 %inline paren(X): LPAREN x=X RPAREN { x }
@@ -88,7 +87,7 @@ cmd_base:
   { SkipCmd }
 | IF test=exp THEN thn=cmd ELSE els=cmd
   { IfCmd{test; thn; els} }
-| OBLIV IF test=exp THEN thn=cmd ELSE els=cmd
+| OBLIF test=exp THEN thn=cmd ELSE els=cmd
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
@@ -122,8 +121,8 @@ decl:
   { RemoteDecl {ty; node; ch; pos=$startpos} }
 
 ch:
-| ty=type_anno ch=ID var=paren(var) body=brace(cmd_seq)
-  { Ch {ty;ch;var;body;pos=$startpos} }
+| ch=ID p=paren(pair(type_anno,var)) body=brace(cmd_seq)
+  { Ch {ty=fst p;ch;var=snd p;body;pos=$startpos} }
 
 (* Top-level *)
 program:

@@ -5,6 +5,6 @@ description: "TODO"
 authors: "jfblaa@cs.au.dk"
 homepage: "https://cs.au.dk"
 bug-reports: "N/A"
-depends: ["dune" "cmdliner" "stdio" "menhir"]
+depends: ["dune" "cmdliner" "yojson" "stdio" "menhir"]
 build: ["dune" "build" "-p" name "-j" jobs]
 

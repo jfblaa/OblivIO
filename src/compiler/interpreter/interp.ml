@@ -9,6 +9,7 @@ open Common.Value
 open Common.Oper
 
 type handler_info = {var: string; cmd: A.cmd}
+type server_info = {input: in_channel; output: out_channel}
 
 type sync_queue =
   { lock: Mutex.t
@@ -20,10 +21,10 @@ type context =
   ; message_queue: sync_queue
   ; input_queue: sync_queue
   ; mutable mode: int list
-  ; mutable mem: (string, value) H.t
-  ; mutable handlers: (string, handler_info) H.t
-  ; mutable trust_map: (string * string, L.level) H.t
-  ; mutable network: (string, context) H.t
+  ; mem: (string, value) H.t
+  ; handlers: (string, handler_info) H.t
+  ; trust_map: (string * string, L.level) H.t
+  ; server: server_info
   }
 
 let enqueue (q: sync_queue) (msg: M.message) =
@@ -88,8 +89,8 @@ let safeBind (bit : int) (orig : char array) (upd : char array) =
         l1, orig, upd in
   let res = Array.make len '\000' in
   for i = 0 to len-1 do
-    let i1 = (1 lxor bit) land (Char.code @@ padded_orig.(i)) in
-    let i2 = bit land (Char.code @@ padded_upd.(i)) in
+    let i1 = (1 lxor bit) * (Char.code @@ padded_orig.(i)) in
+    let i2 = bit * (Char.code @@ padded_upd.(i)) in
     res.(i) <- Char.chr @@ i1 lor i2
   done;
   res
@@ -130,9 +131,13 @@ let op oper v1 v2 =
   | GeOp, IntVal a, IntVal b ->
     IntVal (Bool.to_int @@ (b - a <= 0))
   | AndOp, IntVal a, IntVal b ->
-    IntVal (Bool.to_int @@ (a land b > 0))
+    let ai = (Bool.to_int @@ (a > 0)) in
+    let bi = (Bool.to_int @@ (b > 0)) in
+    IntVal (Bool.to_int @@ (ai land bi > 0))
   | OrOp, IntVal a, IntVal b ->
-    IntVal (Bool.to_int @@ (a lor b > 0))
+    let ai = (Bool.to_int @@ (a > 0)) in
+    let bi = (Bool.to_int @@ (b > 0)) in
+    IntVal (Bool.to_int @@ (ai lor bi > 0))
   | PlusOp, IntVal a, IntVal b ->
     IntVal (a+b)
   | MinusOp, IntVal a, IntVal b ->
@@ -188,9 +193,9 @@ let interpCmd ctxt =
       let bit,v =
         match orig,upd with
         | Val{bit=b1;v=IntVal i1}, Val{bit=b2;v=IntVal i2} ->
-          let bit = ((mode lxor 1) land) lor (mode land b2) in
+          let bit = ((mode lxor 1) land b1) lor (mode land b2) in
           let mode = mode land b2 in
-          let i = ((mode lxor 1) land i1) lor (mode land i2) in
+          let i = ((mode lxor 1) * i1) lor (mode * i2) in
           bit, IntVal i
         | Val{bit=b1;v=StringVal s1}, Val{bit=b2;v=StringVal s2} ->
           let bit = ((mode lxor 1) land b1) lor (mode land b2) in
@@ -202,10 +207,13 @@ let interpCmd ctxt =
       raise @@ NotImplemented "InputCmd"
     | SendCmd { node; channel; exp } ->
       let level = lookup ctxt.trust_map (node,channel) in
-      let value = eval ctxt exp in
-      let queue = (lookup ctxt.network node).message_queue in
-      let msg = M.Msg{sender=ctxt.name;receiver=node;channel;level;value} in
-      enqueue queue msg
+      let Val{bit;v} = eval ctxt exp in
+      let mode = getMode () in
+      let value = Val{bit=bit land mode;v} in
+      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;value} in
+      print_endline "sending...";
+      output_value ctxt.server.output msg;
+      flush ctxt.server.output
     | IfCmd { test; thn; els } ->
       let Val{v;_} = eval ctxt test in
       begin
@@ -226,7 +234,7 @@ let interpCmd ctxt =
       let Val{v;_} = eval ctxt test in
       let i =
         match v with
-        | IntVal 0 -> 0
+        | IntVal n -> Bool.to_int @@ (n <> 0)
         | _ -> 1 in
       let mode = getMode () in
       ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
@@ -252,57 +260,57 @@ let interpCmd ctxt =
   _I
 
 let rec loop ctxt =
-  let _ = match dequeue ctxt.message_queue with
-    | Some (M.Msg{channel;value;_}) ->
-      begin
-        match H.find_opt ctxt.handlers channel with
-        | Some {var;cmd} ->
-          H.add ctxt.mem var value;
-          interpCmd ctxt cmd
-        | None -> ()
-      end
-    | None -> () in
-  T.yield ();
+  begin
+  match input_value ctxt.server.input with
+  | M.Relay{channel;value;_} ->
+    begin
+      match H.find_opt ctxt.handlers channel with
+      | Some {var;cmd} ->
+        H.add ctxt.mem var value;
+        interpCmd ctxt cmd
+      | None -> ()
+    end
+  | _ -> ()
+  end;
   loop ctxt
 
-let interp (progs: A.program list) =
-  let network = H.create 1024 in
-  let setup (A.Prog{node;decls;chs}) =
-    let ctxt =
-      { name = node
-      ; message_queue = 
-        { lock = Mutex.create ()
-        ; queue = []
-        }
-      ; input_queue = 
-        { lock = Mutex.create ()
-        ; queue = []
-        }
-      ; mode = [1]
-      ; mem = H.create 1024
-      ; handlers = H.create 1024
-      ; trust_map = H.create 1024
-      ; network
-      } in
-    let f (A.Ch{ch;var=(var,_);body;_}) =
-      H.add ctxt.handlers ch {var;cmd=body} in
-    let g = function
-      | (A.VarDecl{var=(var,_);init;_}) ->
-        let i = eval ctxt init in
-        H.add ctxt.mem var i;
-      | (A.InternalDecl _) ->
-        raise @@ NotImplemented "InternalDeck"
-      | (A.RemoteDecl{node;ch;ty;_}) ->
-        let lvl = Common.Types.level ty in
-        H.add ctxt.trust_map (node,ch) lvl in
-    
-    H.add network node ctxt;
-    List.iter f chs;
-    List.iter g decls;
-    ctxt in
-  let ctxts = List.map setup progs in
-  let _ = List.map (T.create loop) ctxts in
-  let startMsg = M.Msg{sender="root";receiver="";channel="START";level=L.bottom;value=Val{bit=1;v=IntVal 0}} in
-  List.iter (fun ctxt -> enqueue ctxt.message_queue startMsg) ctxts;
-  T.delay 10.0;
-  ()
+let interp (A.Prog{node;decls;chs}) =
+  let inet_addr = Unix.inet_addr_of_string "127.0.0.1" in
+  let sockaddr = Unix.ADDR_INET (inet_addr,3050) in
+  let input,output = Unix.open_connection sockaddr in
+
+  let ctxt =
+    { name = node
+    ; message_queue = 
+      { lock = Mutex.create ()
+      ; queue = []
+      }
+    ; input_queue = 
+      { lock = Mutex.create ()
+      ; queue = []
+      }
+    ; mode = [1]
+    ; mem = H.create 1024
+    ; handlers = H.create 1024
+    ; trust_map = H.create 1024
+    ; server = {input;output}
+    } in
+  let f (A.Ch{ch;var=(var,_);body;_}) =
+    H.add ctxt.handlers ch {var;cmd=body} in
+  let g = function
+    | (A.VarDecl{var=(var,_);init;_}) ->
+      let i = eval ctxt init in
+      H.add ctxt.mem var i;
+    | (A.InternalDecl _) ->
+      raise @@ NotImplemented "InternalDeck"
+    | (A.RemoteDecl{node;ch;ty;_}) ->
+      let lvl = Common.Types.level ty in
+      H.add ctxt.trust_map (node,ch) lvl in
+  
+  List.iter f chs;
+  List.iter g decls;
+
+  output_value ctxt.server.output (M.Greet {sender=ctxt.name});
+  flush ctxt.server.output;
+
+  loop ctxt

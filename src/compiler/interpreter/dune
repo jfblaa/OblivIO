@@ -1,5 +1,5 @@
 (library
         (name interpreter)
-        (libraries common threads)
+        (libraries common threads yojson)
         )
 

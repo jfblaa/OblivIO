@@ -191,19 +191,21 @@ let transTy ty =
   | A.IntType level -> Ty.INT ^! level
   | A.StringType level -> Ty.STRING ^! level
 
-let transCh ({err;_} as ctxt) (A.Ch{ty;ch;var;body;pos}) =
+let transCh ({gamma;err;_} as ctxt) (A.Ch{ty;ch;var;body;pos}) =
   let ty = transTy ty in
-  let varty = lookupVar ctxt var pos in
-  checkBaseType ty varty err pos;
-  checkFlowType ty varty err pos;
-  checkFlowType varty ty err pos;
+  if H.mem gamma var
+  then Err.error err pos @@ "variable " ^ var ^ " already declared";
+  H.add gamma var ty;
   let body = transCmd ctxt L.bottom body in
-  Ch{ty;ch;var=(var,varty);body;pos}
+  H.remove gamma var;
+  Ch{ty;ch;var=(var,ty);body;pos}
 
 let transDecl ({gamma;pi;lambda;err} as ctxt) dec =
   match dec with
   | A.VarDecl {ty;var;init;padding;pos} ->
     let ty = transTy ty in
+    if H.mem gamma var
+    then Err.error err pos @@ "variable " ^ var ^ " already declared";
     H.add gamma var ty;
     let init,initty = e_ty @@ transExp ctxt init in
     checkBaseType initty ty err pos;

@@ -1,13 +1,11 @@
 BOB
 
-variable int@{} ignored := 0;
-
-remote string@{Bob} RELAY/NAME;
-remote int@{Bob} RELAY/AGE;
-remote string@{Bob} RELAY/INTEREST;
+remote string@{Alice} RELAY/NAME;
+remote int@{Alice} RELAY/AGE;
+remote string@{Alice} RELAY/INTEREST;
 remote int@{} RELAY/DONE;
 
-int@{} START(ignored){
+START(int@{} ignored) {
   send(RELAY/NAME,"Bob");
   send(RELAY/AGE,27);
   send(RELAY/INTEREST,"fishing");

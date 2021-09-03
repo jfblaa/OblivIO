@@ -45,7 +45,7 @@ rule token = parse
 | "internal"          { INTERNAL }
 | "remote"            { REMOTE }
 | "size"              { SIZE }
-| "obliv"             { OBLIV }
+| "oblif"             { OBLIF }
 | "if"                { IF }
 | "then"              { THEN }
 | "else"              { ELSE }

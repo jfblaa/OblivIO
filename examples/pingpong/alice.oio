@@ -1,14 +1,12 @@
 ALICE
 
-variable int@{H} x := 0;
-
 remote int@{H} BOB/PONG;
 
-int@{H} START(x) {
+START(int@{H} x) {
   send(BOB/PONG,x);
 }
 
-int@{H} PING(x) {
+PING(int@{H} x) {
   print("Received", x);
   send(BOB/PONG,x+1);
 }

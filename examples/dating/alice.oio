@@ -1,7 +1,5 @@
 ALICE
 
-variable string@{Alice} result := "";
-
-string@{Alice} MATCH(result) {
+MATCH(string@{Alice} result) {
   print("Match found",result);
 }

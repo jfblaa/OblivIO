@@ -5,37 +5,30 @@ variable int@{Alice} max_age := 35;
 variable string@{Alice} condition := "cats";
 
 variable string@{Alice} result := "";
-
-variable int@{} ignored := 0;
-
-variable string@{Alice} name := "";
-variable int@{Alice} age := 0;
-variable string@{Alice} interest := "";
-
 variable int@{Alice} score := 0;
 
 remote string@{Alice} ALICE/MATCH;
 
-string@{Alice} NAME(name) {
+NAME(string@{Alice} name) {
   result ?= result ^ name;
 }
 
-int@{Alice} AGE(age) {
-  obliv if min_age <= age and age <= max_age
+AGE(int@{Alice} age) {
+  oblif min_age <= age and age <= max_age
   then score ?= score + 1;
   else skip;
   result ?= result ^ "; " ^ "age ok";
 }
 
-string@{Alice} INTEREST(interest){
-  obliv if interest = condition
+INTEREST(string@{Alice} interest) {
+  oblif interest = condition
   then score ?= score + 1;
   else skip;
   result ?= result ^ "; " ^ interest;
 }
 
-int@{} DONE(ignored) {
-  obliv if score >= 2
+DONE(int@{} ignored) {
+  oblif score >= 2
   then send(ALICE/MATCH,result);
   else skip;
 }

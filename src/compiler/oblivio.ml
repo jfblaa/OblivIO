@@ -1,5 +1,3 @@
-type config = {files: string list}
-
 exception CompileError
 
 (** Open the file and initialize the lexer buffer. Observe that the input 
@@ -40,13 +38,13 @@ let semant prog =
 let interp progs =
   Interpreter.Interp.interp progs
   
-let withFlags {files} =
+let client file =
   let exitCode = ref 0 in
   
   begin 
     try
-      List.map parse files
-      |> List.map semant
+      parse file
+      |> semant
       |> interp
     with
       CompileError -> (exitCode := 1)
@@ -57,18 +55,23 @@ open Cmdliner
 
 let src_arg =
   let doc = "Source file $(docv)." in
-  Arg.(value & pos_all non_dir_file [] & info [] ~docv:"FILE" ~doc)
+  Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"FILE" ~doc)
 
-let check files =
-  let config = {files} in
-  withFlags config
+let server_arg =
+  let doc = "Start OblivIO interpreter in $(docv) mode." in
+  Arg.(value & flag & info ["s";"server"] ~docv:"SERVER" ~doc)
+
+let check file is_server =
+  if is_server
+  then Interpreter.Server.start file
+  else client file
 
 let main_t =
-  Term.(const check $ src_arg)
+  Term.(const check $ src_arg $ server_arg)
 
 let info =
   let doc = "OblivIO interpreter." in
-  Term.info "oblivio" ~version:"v0.1" ~doc ~exits:Term.default_exits
+  Term.info "OblivIO" ~version:"v0.3" ~doc ~exits:Term.default_exits
 
 let _ = 
   Term.exit @@ Term.eval (main_t,info)
