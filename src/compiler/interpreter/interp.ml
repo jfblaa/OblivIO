@@ -19,7 +19,7 @@ type sync_queue =
 type context = 
   { name: string
   ; message_queue: sync_queue
-  ; input_queue: sync_queue
+  ; mutable input_buffer: char array
   ; mutable mode: int list
   ; mem: (string, value) H.t
   ; handlers: (string, handler_info) H.t
@@ -203,15 +203,34 @@ let interpCmd ctxt =
           bit, StringVal s
         | _ -> raise @@ InterpFatal ("type mismatch during bind") in
       H.add ctxt.mem x (Val{bit;v})
-    | InputCmd _ (*{ var; ch; size }*) ->
-      raise @@ NotImplemented "InputCmd"
+    | InputCmd { var=(x,_); size; _ } ->
+      let Val{bit;v} = eval ctxt size in
+      let n =
+        match v with
+        | IntVal n -> n
+        | _ -> raise @@ InterpFatal __LOC__ in
+      let max_len = Array.length ctxt.input_buffer in
+      let res_len = min n max_len in
+      let blank = Array.make res_len '\000' in
+      let upd = Array.sub ctxt.input_buffer 0 res_len in
+      let mode = getMode () in
+      let res = safeBind (mode land bit) blank upd in
+      let resbit = Bool.to_int @@ (res.(0) <> '\000') in
+
+      let buf_upd =
+        Array.append
+          (Array.sub ctxt.input_buffer res_len (max_len - res_len))
+          blank in
+      
+      ctxt.input_buffer <- safeBind (mode land bit) ctxt.input_buffer buf_upd;
+
+      H.add ctxt.mem x (Val{bit=mode land bit land resbit;v=StringVal res})
     | SendCmd { node; channel; exp } ->
       let level = lookup ctxt.trust_map (node,channel) in
       let Val{bit;v} = eval ctxt exp in
       let mode = getMode () in
       let value = Val{bit=bit land mode;v} in
       let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;value} in
-      print_endline "sending...";
       output_value ctxt.server.output msg;
       flush ctxt.server.output
     | IfCmd { test; thn; els } ->
@@ -255,7 +274,7 @@ let interpCmd ctxt =
         match info with
         | Some s -> s ^ ": "
         | None -> "" in
-      if mode land bit = 1 then print_endline @@ "(" ^ ctxt.name ^ ") " ^ intro ^ base_to_string v;
+      if mode land bit = 1 then print_endline @@ intro ^ base_to_string v;
       in
   _I
 
@@ -272,7 +291,16 @@ let rec loop ctxt =
     end
   | _ -> ()
   end;
+  T.yield ();
   loop ctxt
+
+let rec prompt ctxt () =
+  let line = read_line () in
+  let arr = line |> String.to_seq |> Array.of_seq in
+  let l1 = Array.length arr in
+  let l2 = Array.length ctxt.input_buffer in
+  Array.blit arr 0 ctxt.input_buffer 0 (min l1 l2);
+  prompt ctxt ()
 
 let interp (A.Prog{node;decls;chs}) =
   let inet_addr = Unix.inet_addr_of_string "127.0.0.1" in
@@ -285,10 +313,7 @@ let interp (A.Prog{node;decls;chs}) =
       { lock = Mutex.create ()
       ; queue = []
       }
-    ; input_queue = 
-      { lock = Mutex.create ()
-      ; queue = []
-      }
+    ; input_buffer = Array.make 256 '\000'
     ; mode = [1]
     ; mem = H.create 1024
     ; handlers = H.create 1024
@@ -298,12 +323,23 @@ let interp (A.Prog{node;decls;chs}) =
   let f (A.Ch{ch;var=(var,_);body;_}) =
     H.add ctxt.handlers ch {var;cmd=body} in
   let g = function
-    | (A.VarDecl{var=(var,_);init;_}) ->
+    | (A.VarDecl{var=(var,_);init;padding=None;_}) ->
       let i = eval ctxt init in
-      H.add ctxt.mem var i;
-    | (A.InternalDecl _) ->
-      raise @@ NotImplemented "InternalDeck"
-    | (A.RemoteDecl{node;ch;ty;_}) ->
+      H.add ctxt.mem var i
+    | (A.VarDecl{var=(var,_);init;padding=Some pad;_}) ->
+      let i = eval ctxt init in
+      let p = eval ctxt pad in
+      begin
+      match i, p with
+      | Val{v=StringVal orig;_}, Val{v=IntVal pad;_} ->
+        let upd = Array.make pad '\000' in
+        let v = StringVal (safeBind 0 orig upd) in
+        H.add ctxt.mem var (Val{bit=1;v})
+      | _ -> raise @@ InterpFatal __LOC__
+      end
+    | (A.InputDecl _) ->
+      ()
+    | (A.ChannelDecl{node;ch;ty;_}) ->
       let lvl = Common.Types.level ty in
       H.add ctxt.trust_map (node,ch) lvl in
   
@@ -312,5 +348,7 @@ let interp (A.Prog{node;decls;chs}) =
 
   output_value ctxt.server.output (M.Greet {sender=ctxt.name});
   flush ctxt.server.output;
+
+  let _ = T.create (prompt ctxt) () in
 
   loop ctxt

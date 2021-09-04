@@ -13,7 +13,7 @@ module H = Hashtbl
 
 type context 
   = { gamma : (string, Ty.ty) H.t
-    ; pi : (string, Ty.ty) H.t
+    ; mutable input: Ty.ty option
     ; lambda : (string * string, Ty.ty) H.t
     ; err :  Err.errorenv 
     }
@@ -31,10 +31,10 @@ let lookupVar ({gamma;err;_}) v pos =
   | Some ty -> ty
   | None -> errTy err pos @@ "undeclared variable " ^ v
 
-let lookupInternal ({pi;err;_}) ch pos = 
-  match H.find_opt pi ch with
-  | Some ty -> ty
-  | None -> errTy err pos @@ "undeclared internal channel " ^ ch
+let lookupInternal ({input;err;_}) pos = 
+    match input with
+    | Some ty -> ty
+    | None -> errTy err pos @@ "undeclared internal channel"
 
 let lookupRemote ({lambda;err;_}) node ch pos = 
   match H.find_opt lambda (node,ch) with
@@ -147,14 +147,14 @@ let transCmd ({err;_} as ctxt) =
       checkBaseType ety varty err pos;
       checkFlowTypePC pc ety varty err pos;
       fromBase @@ BindCmd{var=(var,varty);exp=e}
-    | InputCmd {var;ch;size} ->
+    | InputCmd {var;size} ->
       let varty = lookupVar ctxt var pos in
-      let chty = lookupInternal ctxt ch pos in
+      let chty = lookupInternal ctxt pos in
       let size,sizety = e_ty @@ transExp ctxt size in
       checkBaseType chty varty err pos;
       checkFlowTypePC pc chty varty err pos;
       checkInt sizety err pos;
-      fromBase @@ InputCmd{var=(var,varty);ch;size}
+      fromBase @@ InputCmd{var=(var,varty);size}
     | SendCmd {node;channel;exp} ->
       let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -200,7 +200,7 @@ let transCh ({gamma;err;_} as ctxt) (A.Ch{ty;ch;var;body;pos}) =
   H.remove gamma var;
   Ch{ty;ch;var=(var,ty);body;pos}
 
-let transDecl ({gamma;pi;lambda;err} as ctxt) dec =
+let transDecl ({gamma;input;lambda;err} as ctxt) dec =
   match dec with
   | A.VarDecl {ty;var;init;padding;pos} ->
     let ty = transTy ty in
@@ -213,26 +213,31 @@ let transDecl ({gamma;pi;lambda;err} as ctxt) dec =
     begin
     match padding with
     | Some pad -> 
-      let pad,padty = e_ty @@ transExp ctxt pad in
-      checkBaseType padty ty err pos;
-      checkFlowType padty ty err pos;
+      let pad,padty,padlvl = e_ty_lvl @@ transExp ctxt pad in
+      checkInt padty err pos;
+      checkFlow padlvl L.bottom err pos;
       VarDecl{var=(var,ty);init;padding=Some(pad);pos}
     | None ->
       VarDecl{var=(var,ty);init;padding=None;pos}
     end
-  | A.InternalDecl {ty;ch;pos} ->
-      let ty = transTy ty in
-      H.add pi ch ty;
-      InternalDecl{ch;ty;pos}
-  | A.RemoteDecl {ty;node;ch;pos} ->
+  | A.ChannelDecl {ty;node;ch;pos} ->
     let ty = transTy ty in
     H.add lambda (node,ch) ty;
-    RemoteDecl{node;ch;ty;pos}
+    ChannelDecl{node;ch;ty;pos}
+  | A.InputDecl{ty;pos} ->
+    let ty = transTy ty in
+    begin
+    match input with
+    | Some _ -> Err.error err pos @@ "input channel already declared"
+    | None -> ctxt.input <- Some ty
+    end;
+    checkString ty err pos;
+    InputDecl{ty;pos}
 
 let transProg (A.Prog{node;decls;chs}) =
   let ctxt = 
     { gamma = H.create 1024
-    ; pi = H.create 1024
+    ; input = None
     ; lambda = H.create 1024
     ; err = Err.initial_env
     } in

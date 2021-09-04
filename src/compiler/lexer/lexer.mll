@@ -41,9 +41,9 @@ rule token = parse
 | '@'                 { AT }
 | ":="                { ASSIGN }
 | "?="                { BIND }
-| "variable"          { VAR }
-| "internal"          { INTERNAL }
-| "remote"            { REMOTE }
+| "var"               { VAR }
+| "padto"             { PADTO }
+| "channel"           { CHANNEL }
 | "size"              { SIZE }
 | "oblif"             { OBLIF }
 | "if"                { IF }

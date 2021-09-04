@@ -1,6 +1,6 @@
 BOB
 
-remote int@{H} ALICE/PING;
+channel int@{H} ALICE/PING;
 
 PONG(int@{H} x) {
   print("Received", x);

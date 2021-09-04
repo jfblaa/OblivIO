@@ -61,6 +61,7 @@ let start json_file =
       begin
       match input_value in_channel with
       | M.Greet {sender} ->
+        print_endline @@ sender ^ " connected...";
         H.add routing_table sender out_channel;
         let open Common.Value in
         let msg = M.Relay{sender="";receiver="";channel="START";level=Common.Level.bottom;value=Val{bit=1;v=IntVal 0}} in
@@ -80,9 +81,7 @@ let start json_file =
 
   (* https://eighty-twenty.org/2012/01/07/simple-networking-with-ocaml *)
   let rec accept_loop sock =
-    print_endline "server is listening...";
     let (s, _) = Unix.accept sock in
     let _ = Thread.create conn_main s in
     accept_loop sock in
-  
   accept_loop sock

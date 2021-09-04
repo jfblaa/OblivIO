@@ -1,0 +1,18 @@
+ALICE
+
+var string@{H} msg_out := "";
+
+channel string@{H} BOB/CHAT;
+input string@{H};
+
+START(int@{} ignored) {
+    oblif 0
+    then send(BOB/CHAT,"");
+    else skip;
+}
+
+CHAT(string@{H} msg_in) {
+    print("Bob says",msg_in);
+    msg_out := input(5);
+    send(BOB/CHAT,msg_out);
+}

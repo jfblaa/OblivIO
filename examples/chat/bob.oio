@@ -1,0 +1,12 @@
+BOB
+
+var string@{H} msg_out := "";
+
+channel string@{H} ALICE/CHAT;
+input string@{H};
+
+CHAT(string@{H} msg_in) {
+    print("Alice says",msg_in);
+    msg_out := input(32);
+    send(ALICE/CHAT,msg_out);
+}

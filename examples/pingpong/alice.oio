@@ -1,6 +1,6 @@
 ALICE
 
-remote int@{H} BOB/PONG;
+channel int@{H} BOB/PONG;
 
 START(int@{H} x) {
   send(BOB/PONG,x);

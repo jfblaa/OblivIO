@@ -1,15 +1,19 @@
 BOB
 
-remote string@{Alice} RELAY/NAME;
-remote int@{Alice} RELAY/AGE;
-remote string@{Alice} RELAY/INTEREST;
-remote int@{} RELAY/DONE;
+channel string@{H} ALICE/NAME;
+channel int@{H} ALICE/AGE;
+channel string@{H} ALICE/INTEREST;
+channel int@{} ALICE/ASK;
 
 START(int@{} ignored) {
-  send(RELAY/NAME,"Bob");
-  send(RELAY/AGE,27);
-  send(RELAY/INTEREST,"fishing");
-  send(RELAY/INTEREST,"cats");
-  send(RELAY/INTEREST,"compilers");
-  send(RELAY/DONE,0);
+  send(ALICE/NAME,"Bob");
+  send(ALICE/AGE,27);
+  send(ALICE/INTEREST,"fishing");
+  send(ALICE/INTEREST,"dogs");
+  send(ALICE/INTEREST,"compilers");
+  send(ALICE/ASK,0);
+}
+
+MATCH(string@{H} msg) {
+  print("Alice says", msg);
 }

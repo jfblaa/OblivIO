@@ -11,8 +11,8 @@ let base_to_string = function
 
 let sizeof (Val{v;_}) =
   match v with
-  | IntVal _ -> 64
-  | StringVal s -> 8 * Array.length s
+  | IntVal _ -> 8
+  | StringVal s -> Array.length s
 
 let to_string (Val{bit;v} as v') =
   String.concat ""

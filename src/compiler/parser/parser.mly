@@ -7,11 +7,11 @@
 %token <string> ID
 %token <int> INT
 %token <string> STRING
-%token VAR INTERNAL REMOTE
+%token VAR CHANNEL
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS EQ NEQ LT LE GT GE CARET
-%token QMARK SIZE SLASH AT PRINT
+%token QMARK SIZE SLASH AT PRINT PADTO
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
@@ -91,8 +91,8 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
-| v=var ASSIGN INPUT RPAREN ch=ID COMMA size=exp RPAREN SEMICOLON
-  { InputCmd {var=v;ch;size} }
+| v=var ASSIGN INPUT LPAREN size=exp RPAREN SEMICOLON
+  { InputCmd {var=v;size} }
 | SEND LPAREN node=ID SLASH channel=ID COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
@@ -113,12 +113,12 @@ type_anno:
 | STRINGTYPE AT lvl=lvl         { StringType lvl }
 
 decl:
-| VAR ty=type_anno var=var ASSIGN init=exp padding=ioption(preceded(BIND,exp)) SEMICOLON
+| VAR ty=type_anno var=var ASSIGN init=exp padding=ioption(preceded(PADTO,exp)) SEMICOLON
   { VarDecl {ty; var; init; padding; pos=$startpos} }
-| INTERNAL ty=type_anno ch=ID SEMICOLON
-  { InternalDecl {ty; ch; pos=$startpos} }
-| REMOTE ty=type_anno node=ID SLASH ch=ID SEMICOLON
-  { RemoteDecl {ty; node; ch; pos=$startpos} }
+| CHANNEL ty=type_anno node=ID SLASH ch=ID SEMICOLON
+  { ChannelDecl {ty; node; ch; pos=$startpos} }
+| INPUT ty=type_anno SEMICOLON
+  { InputDecl {ty; pos=$startpos} }
 
 ch:
 | ch=ID p=paren(pair(type_anno,var)) body=brace(cmd_seq)
