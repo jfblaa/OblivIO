@@ -1,5 +1,5 @@
 Alice
 
 START(int@{} ignored) {
-    print("Alice","I have received the START message!");
+    print("div",10/0);
 }

@@ -28,6 +28,8 @@ rule token = parse
 | ']'                 { RBRACK }
 | '+'                 { PLUS }
 | '-'                 { MINUS }
+| '*'                 { TIMES }
+| '/'                 { DIVIDE }
 | "="                 { EQ }
 | "<>"                { NEQ }
 | "<="                { LE }
@@ -64,7 +66,6 @@ rule token = parse
 | digit+ idchar+ as l { error lexbuf @@ "Invalid literal '" ^ l ^ "'" }
 | "_" idchar+         { error lexbuf "Invalid identifier, id cannot start with '_'" }
 | letter idchar* as id  { ID id }
-| '/'                 { SLASH }
 | '\"'                { let start_p = lexbuf.lex_start_p in
                         let str = string "" lexbuf in
                         lexbuf.lex_start_p <- start_p;

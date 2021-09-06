@@ -1,0 +1,29 @@
+ALICE
+
+var int@{Alice} work_hours := 115;
+var int@{Alice} salary := 0;
+
+channel int@{Alice} EMPLOYER/REPORT_HOURS;
+channel int@{Alice} BANK/CALCULATE_TAX;
+channel int@{Alice,Bank} BANK/INVEST;
+channel int@{Alice,Bank} BANK/DEPOSIT;
+
+// 1. Alice reports her work hours to get her pay
+// 2. Depending on pay, Alice ???
+//    - Alice contacts the bank to calculate her taxes
+// 3. Depending on taxes, Alice decides to invest (tax deductible) or deposit
+
+START(int@{} ignored) {
+    send(EMPLOYER/REPORT_HOURS,work_hours);
+}
+
+PAYCHECK(int@{Alice} amount) {
+    salary := amount;
+    send(BANK/CALCULATE_TAX,1);
+}
+
+TAX_RESULT(int@{Alice,Bank} taxes) {
+    oblif taxes > 8000
+    then send(BANK/INVEST,1);
+    else send(BANK/DEPOSIT,1);
+}

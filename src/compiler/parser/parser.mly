@@ -10,8 +10,8 @@
 %token VAR CHANNEL
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
-%token PLUS MINUS EQ NEQ LT LE GT GE CARET
-%token QMARK SIZE SLASH AT PRINT PADTO
+%token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
+%token QMARK SIZE AT PRINT PADTO
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
@@ -20,6 +20,7 @@
 %left AND
 %nonassoc EQ NEQ GT LT GE LE
 %left PLUS MINUS
+%left TIMES DIVIDE
 %nonassoc UMINUS QMARK
 %right CARET
 
@@ -37,6 +38,8 @@
 %inline op:
 | PLUS    { PlusOp }
 | MINUS   { MinusOp }
+| TIMES   { TimesOp }
+| DIVIDE  { DivideOp }
 | AND     { AndOp }
 | OR      { OrOp }
 | EQ      { EqOp }
@@ -93,7 +96,7 @@ cmd_base:
   { WhileCmd{test; body} }
 | v=var ASSIGN INPUT LPAREN size=exp RPAREN SEMICOLON
   { InputCmd {var=v;size} }
-| SEND LPAREN node=ID SLASH channel=ID COMMA exp=exp RPAREN SEMICOLON
+| SEND LPAREN node=ID DIVIDE channel=ID COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
@@ -115,7 +118,7 @@ type_anno:
 decl:
 | VAR ty=type_anno var=var ASSIGN init=exp padding=ioption(preceded(PADTO,exp)) SEMICOLON
   { VarDecl {ty; var; init; padding; pos=$startpos} }
-| CHANNEL ty=type_anno node=ID SLASH ch=ID SEMICOLON
+| CHANNEL ty=type_anno node=ID DIVIDE ch=ID SEMICOLON
   { ChannelDecl {ty; node; ch; pos=$startpos} }
 | INPUT ty=type_anno SEMICOLON
   { InputDecl {ty; pos=$startpos} }

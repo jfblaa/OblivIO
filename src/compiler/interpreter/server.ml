@@ -47,8 +47,7 @@ let start json_file =
   
   let log msg =
     print_endline @@ String.concat "" [
-        "OBS: "
-      ; M.to_string_at_level msg advlevel
+      M.to_string_at_level msg advlevel
     ] in
 
   let routing_table = H.create 1024 in

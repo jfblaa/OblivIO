@@ -52,6 +52,11 @@ let lookup m x =
   | Some v -> v
   | None -> raise @@ InterpFatal ("lookup")
 
+let safeDiv a b =
+  let b0 = Bool.to_int (b = 0) in
+  let b' = b*(b0 lxor 1) lor b0 in
+  ((a / b')*(b0 lxor 1)) lor (b0*max_int)
+
 let safeConcat (arr1 : char array) (arr2 : char array) =
   let l1 = Array.length arr1 in
   let l2 = Array.length arr2 in
@@ -142,6 +147,10 @@ let op oper v1 v2 =
     IntVal (a+b)
   | MinusOp, IntVal a, IntVal b ->
     IntVal (a-b)
+  | TimesOp, IntVal a, IntVal b ->
+    IntVal (a*b)
+  | DivideOp, IntVal a, IntVal b ->
+    IntVal (safeDiv a b)
   (* STRING *)
   | EqOp, StringVal a, StringVal b ->
     IntVal (safeEq a b)

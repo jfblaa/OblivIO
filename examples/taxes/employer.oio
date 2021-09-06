@@ -1,0 +1,20 @@
+EMPLOYER
+
+var int@{} standard_hours := 90;
+var int@{} standard_wage := 200;
+var int@{} overtime_wage := 280;
+var int@{Alice} amount := 0;
+
+channel int@{Alice} BANK/REPORT_INCOME;
+channel int@{Alice} ALICE/PAYCHECK;
+
+REPORT_HOURS(int@{Alice} hours) {
+    oblif hours > standard_hours
+    then amount ?= 
+        standard_hours * standard_wage 
+        + (hours - standard_hours) * overtime_wage;
+    else amount ?= hours * standard_hours;
+    
+    send(BANK/REPORT_INCOME,amount);
+    send(ALICE/PAYCHECK,amount);
+}

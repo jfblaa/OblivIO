@@ -25,11 +25,9 @@ let to_string (Val{bit;v} as v') =
   ; "}"
   ]
 
-let to_string_enc (Val{bit;_} as v') =
+let to_string_enc v' =
   String.concat ""
-  [ "{bit:"
-  ; Int.to_string bit
-  ; ", size:"
+  [ "{bit:#, size:"
   ; Int.to_string @@ sizeof v'
   ; ", v:"
   ; "<#####>"
