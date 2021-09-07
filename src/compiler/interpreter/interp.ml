@@ -99,9 +99,9 @@ let safeBind (bit : int) (orig : char array) (upd : char array) =
     res.(i) <- Char.chr @@ i1 lor i2
   done;
   res
-
+ 
 let safeEq (arr1 : char array) (arr2 : char array) =
-  let matches = ref 0 in
+  let mismatch = ref 0 in
   let len, chk_opt =
     match Array.length arr1, Array.length arr2 with
     | l1, l2 when l1 < l2 -> l1, Some arr2
@@ -110,15 +110,15 @@ let safeEq (arr1 : char array) (arr2 : char array) =
   for i = 0 to len-1 do
     let i1 = Char.code @@ arr1.(i) in
     let i2 = Char.code @@ arr1.(i) in
-    matches := i1 lxor i2 lor !matches
+    mismatch := (i1 lxor i2) lor !mismatch
   done;
   (match chk_opt with
   | Some arr ->
     let i1 = Char.code @@ arr.(len) in
     let i2 = Char.code '\000' in
-    matches := i1 lxor i2 lor !matches
+    mismatch := (i1 lxor i2) lor !mismatch
   | _ -> ());
-  Bool.to_int (!matches = 0)
+  Bool.to_int (!mismatch = 0)
 
 let op oper v1 v2 =
   match oper,v1,v2 with
@@ -238,6 +238,11 @@ let interpCmd ctxt =
       let level = lookup ctxt.trust_map (node,channel) in
       let Val{bit;v} = eval ctxt exp in
       let mode = getMode () in
+      let v =
+          match v with
+          | IntVal n -> IntVal ((bit land mode)*n)
+          | StringVal s ->
+            StringVal (safeBind (bit land mode) (Array.make (Array.length s) '\000') s) in
       let value = Val{bit=bit land mode;v} in
       let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;value} in
       output_value ctxt.server.output msg;

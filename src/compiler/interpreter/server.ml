@@ -20,11 +20,11 @@ let start json_file =
   let inet_addr = Unix.inet_addr_of_string addr_str in
   let sockaddr = Unix.ADDR_INET (inet_addr,port) in
   let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
-  (*Unix.setsockopt sock Unix.SO_KEEPALIVE true;
+  Unix.setsockopt sock Unix.SO_KEEPALIVE true;
   Unix.setsockopt sock Unix.SO_REUSEADDR true;
   Unix.setsockopt sock Unix.SO_REUSEPORT true;
 
-  Unix.setsockopt_int sock Unix.SO_SNDBUF 512;
+  (*Unix.setsockopt_int sock Unix.SO_SNDBUF 512;
   Unix.setsockopt_int sock Unix.SO_RCVBUF 512;*)
 
   Unix.bind sock sockaddr;

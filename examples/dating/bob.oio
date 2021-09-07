@@ -9,7 +9,7 @@ START(int@{} ignored) {
   send(ALICE/NAME,"Bob");
   send(ALICE/AGE,27);
   send(ALICE/INTEREST,"fishing");
-  send(ALICE/INTEREST,"dogs");
+  send(ALICE/INTEREST,"cats");
   send(ALICE/INTEREST,"compilers");
   send(ALICE/ASK,0);
 }
