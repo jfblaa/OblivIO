@@ -109,7 +109,7 @@ let safeEq (arr1 : char array) (arr2 : char array) =
     | l1, _ -> l1, None in
   for i = 0 to len-1 do
     let i1 = Char.code @@ arr1.(i) in
-    let i2 = Char.code @@ arr1.(i) in
+    let i2 = Char.code @@ arr2.(i) in
     mismatch := (i1 lxor i2) lor !mismatch
   done;
   (match chk_opt with

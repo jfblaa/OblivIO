@@ -1,0 +1,88 @@
+AUCTIONHOUSE
+
+channel int@{H} ALICE/AUCTION_STATUS;
+channel int@{H} BOB/AUCTION_STATUS;
+channel int@{H} CAROL/AUCTION_STATUS;
+
+channel int@{H} ALICE/AUCTION_WON;
+channel int@{H} ALICE/AUCTION_LOST;
+channel int@{H} BOB/AUCTION_WON;
+channel int@{H} BOB/AUCTION_LOST;
+channel int@{H} CAROL/AUCTION_WON;
+channel int@{H} CAROL/AUCTION_LOST;
+
+var int@{} counter := 3000;
+var int@{H} winning_bid := 0;
+var string@{H} winning_name := "";
+
+START(int@{} i) {
+    send(ALICE/AUCTION_STATUS,winning_bid);
+    send(BOB/AUCTION_STATUS,winning_bid);
+    send(CAROL/AUCTION_STATUS,winning_bid);
+}
+
+BID_ALICE(int@{H} bid) {
+    if counter > 0
+    then {
+        oblif ?bid and bid > winning_bid
+        then {
+            winning_bid ?= bid;
+            winning_name ?= "Alice";
+        }
+        else
+            oblif winning_name = "Alice"
+            then skip;
+            else send(ALICE/AUCTION_STATUS,winning_bid);
+
+        counter := counter - 1;
+    }
+    else {
+        oblif winning_name = "Alice"
+        then send(ALICE/AUCTION_WON,winning_bid);
+        else send(ALICE/AUCTION_LOST,winning_bid);
+    }
+}
+
+BID_BOB(int@{H} bid) {
+    if counter > 0
+    then {
+        oblif ?bid and bid > winning_bid
+        then {
+            winning_bid ?= bid;
+            winning_name ?= "Bob";
+        }
+        else
+            oblif winning_name = "Bob"
+            then skip;
+            else send(BOB/AUCTION_STATUS,winning_bid);
+        
+        counter := counter - 1;
+    }
+    else {
+        oblif winning_name = "Bob"
+        then send(BOB/AUCTION_WON,winning_bid);
+        else send(BOB/AUCTION_LOST,winning_bid);
+    }
+}
+
+BID_CAROL(int@{H} bid) {
+    if counter > 0
+    then {
+        oblif ?bid and bid > winning_bid
+        then {
+            winning_bid ?= bid;
+            winning_name ?= "Carol";
+        }
+        else
+            oblif winning_name = "Carol"
+            then skip;
+            else send(CAROL/AUCTION_STATUS,winning_bid);
+
+        counter := counter - 1;
+    }
+    else {
+        oblif winning_name = "Carol"
+        then send(CAROL/AUCTION_WON,winning_bid);
+        else send(CAROL/AUCTION_LOST,winning_bid);
+    }
+}

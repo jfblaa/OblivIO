@@ -1,0 +1,19 @@
+CAROL
+
+var int@{H} max_bid := 512;
+
+channel int@{H} AUCTIONHOUSE/BID_CAROL;
+
+AUCTION_STATUS(int@{H} winning_bid) {
+    oblif winning_bid < max_bid
+    then send(AUCTIONHOUSE/BID_CAROL,winning_bid+1);
+    else skip;
+}
+
+AUCTION_WON(int@{H} amount) {
+    print("Won auction with a bid of",amount);
+}
+
+AUCTION_LOST(int@{H} amount) {
+    print("Lost the auction. Winning bid was",amount);
+}
