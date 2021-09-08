@@ -8,7 +8,6 @@ var int@{Alice} standard_pay := 0;
 var int@{Alice} overtime_pay := 0;
 
 
-channel int@{Alice} BANK/REPORT_INCOME;
 channel int@{Alice} ALICE/PAYCHECK;
 
 REPORT_HOURS(int@{Alice} hours) {
@@ -20,6 +19,5 @@ REPORT_HOURS(int@{Alice} hours) {
     }
     else amount ?= hours * standard_wage;
     
-    send(BANK/REPORT_INCOME,amount);
     send(ALICE/PAYCHECK,amount);
 }

@@ -29,10 +29,11 @@ BID_ALICE(int@{H} bid) {
             winning_bid ?= bid;
             winning_name ?= "Alice";
         }
-        else
+        else {
             oblif winning_name = "Alice"
             then skip;
             else send(ALICE/AUCTION_STATUS,winning_bid);
+        }
 
         counter := counter - 1;
     }
@@ -51,10 +52,11 @@ BID_BOB(int@{H} bid) {
             winning_bid ?= bid;
             winning_name ?= "Bob";
         }
-        else
+        else {
             oblif winning_name = "Bob"
             then skip;
             else send(BOB/AUCTION_STATUS,winning_bid);
+        }
         
         counter := counter - 1;
     }
@@ -73,10 +75,11 @@ BID_CAROL(int@{H} bid) {
             winning_bid ?= bid;
             winning_name ?= "Carol";
         }
-        else
+        else {
             oblif winning_name = "Carol"
             then skip;
             else send(CAROL/AUCTION_STATUS,winning_bid);
+        }
 
         counter := counter - 1;
     }

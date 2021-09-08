@@ -24,6 +24,6 @@ PAYCHECK(int@{Alice} amount) {
 
 TAX_RESULT(int@{Alice,Bank} taxes) {
     oblif taxes > salary * 30 / 100
-    then send(BANK/INVEST,1);
-    else send(BANK/DEPOSIT,1);
+    then send(BANK/INVEST,salary);
+    else send(BANK/DEPOSIT,salary);
 }
