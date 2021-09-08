@@ -13,6 +13,6 @@ START(int@{} ignored) {
 
 CHAT(string@{H} msg_in) {
     print("Bob says",msg_in);
-    msg_out := input(5);
+    msg_out := input("" padto 32);
     send(BOB/CHAT,msg_out);
 }

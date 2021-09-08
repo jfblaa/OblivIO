@@ -8,7 +8,7 @@ and ty
   = IntType of level
   | StringType of level
 and decl
-  = VarDecl of { ty: ty; var: var; init: exp; padding: exp option; pos: pos }
+  = VarDecl of { ty: ty; var: var; init: exp; pos: pos }
   | ChannelDecl of { ty: ty; node: string; ch: string; pos: pos }
   | InputDecl of {ty: ty; pos: pos }
 and ch
@@ -28,7 +28,7 @@ and cmd_base
   | SeqCmd of { c1: cmd; c2: cmd }
   | AssignCmd of { var: var; exp: exp }
   | BindCmd of { var: var; exp: exp }
-  | InputCmd of { var: var; size: exp }
+  | InputCmd of { var: var; default: exp }
   | SendCmd of { node: string; channel: string; exp: exp }
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }

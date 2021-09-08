@@ -7,7 +7,7 @@ include Oper
 
 type program = Prog of { node: string; decls: decl list; chs: ch list }
 and decl
-  = VarDecl of { var: var; init: exp; padding: exp option; pos: pos }
+  = VarDecl of { var: var; init: exp; pos: pos }
   | ChannelDecl of { node: string; ch: string; ty: T.ty; pos: pos }
   | InputDecl of {ty: T.ty; pos: pos }
 and ch
@@ -27,7 +27,7 @@ and cmd_base
   | SeqCmd of { c1: cmd; c2: cmd }
   | AssignCmd of { var: var; exp: exp }
   | BindCmd of { var: var; exp: exp }
-  | InputCmd of { var: var; size: exp }
+  | InputCmd of { var: var; default: exp }
   | SendCmd of { node: string; channel: string; exp: exp }
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }

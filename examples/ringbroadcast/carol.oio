@@ -1,0 +1,17 @@
+CAROL
+
+channel string@{H} ALICE/RCV;
+input string@{H};
+
+var string@{H} msg_out := "";
+
+RCV(string@{H} msg_in) {
+    oblif ?msg_in and msg_in <> msg_out
+    then {
+        print(msg_in);
+        msg_out ?= msg_in;
+    }
+    else msg_out := input(msg_in);
+    
+    send(ALICE/RCV, msg_out);
+}

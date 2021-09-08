@@ -19,10 +19,10 @@
 %left OR
 %left AND
 %nonassoc EQ NEQ GT LT GE LE
+%left CARET PADTO
 %left PLUS MINUS
 %left TIMES DIVIDE
 %nonassoc UMINUS QMARK
-%right CARET
 
 %start <Common.Absyn.program> program  
 
@@ -49,6 +49,7 @@
 | GT      { GtOp }
 | GE      { GeOp }
 | CARET   { CaretOp }
+| PADTO   { PadOp }
 
 binop_exp:
 | MINUS right=exp %prec UMINUS
@@ -94,8 +95,8 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
-| v=var ASSIGN INPUT LPAREN size=exp RPAREN SEMICOLON
-  { InputCmd {var=v;size} }
+| v=var ASSIGN INPUT LPAREN default=exp RPAREN SEMICOLON
+  { InputCmd {var=v;default} }
 | SEND LPAREN node=ID DIVIDE channel=ID COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
@@ -116,8 +117,8 @@ type_anno:
 | STRINGTYPE AT lvl=lvl         { StringType lvl }
 
 decl:
-| VAR ty=type_anno var=var ASSIGN init=exp padding=ioption(preceded(PADTO,exp)) SEMICOLON
-  { VarDecl {ty; var; init; padding; pos=$startpos} }
+| VAR ty=type_anno var=var ASSIGN init=exp SEMICOLON
+  { VarDecl {ty; var; init; pos=$startpos} }
 | CHANNEL ty=type_anno node=ID DIVIDE ch=ID SEMICOLON
   { ChannelDecl {ty; node; ch; pos=$startpos} }
 | INPUT ty=type_anno SEMICOLON

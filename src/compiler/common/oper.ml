@@ -3,3 +3,4 @@ type oper
   | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp 
   | AndOp | OrOp
   | CaretOp
+  | PadOp

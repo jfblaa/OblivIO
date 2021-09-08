@@ -158,6 +158,9 @@ let op oper v1 v2 =
     IntVal ((safeEq a b) lxor 1)
   | CaretOp, StringVal a, StringVal b ->
     StringVal (safeConcat a b)
+  | PadOp, StringVal s, IntVal n ->
+    let upd = Array.make n '\000' in
+    StringVal (safeBind 0 s upd)
   | _ -> raise @@ NotImplemented "binop"
 
 let eval {mem;_} =
@@ -212,37 +215,32 @@ let interpCmd ctxt =
           bit, StringVal s
         | _ -> raise @@ InterpFatal ("type mismatch during bind") in
       H.add ctxt.mem x (Val{bit;v})
-    | InputCmd { var=(x,_); size; _ } ->
-      let Val{bit;v} = eval ctxt size in
-      let n =
+    | InputCmd { var=(x,_); default; _ } ->
+      let Val{bit;v} = eval ctxt default in
+      let arr, len =
         match v with
-        | IntVal n -> n
+        | StringVal s -> s, Array.length s
         | _ -> raise @@ InterpFatal __LOC__ in
       let max_len = Array.length ctxt.input_buffer in
-      let res_len = min n max_len in
-      let blank = Array.make res_len '\000' in
+      let res_len = min len max_len in
       let upd = Array.sub ctxt.input_buffer 0 res_len in
+      let updbit = Bool.to_int @@ (upd.(0) <> '\000') in
       let mode = getMode () in
-      let res = safeBind (mode land bit) blank upd in
-      let resbit = Bool.to_int @@ (res.(0) <> '\000') in
-
+      let res = safeBind (mode land updbit) arr upd in
+      
+      let blank = Array.make res_len '\000' in
       let buf_upd =
         Array.append
           (Array.sub ctxt.input_buffer res_len (max_len - res_len))
           blank in
       
-      ctxt.input_buffer <- safeBind (mode land bit) ctxt.input_buffer buf_upd;
+      ctxt.input_buffer <- safeBind (mode land updbit) ctxt.input_buffer buf_upd;
 
-      H.add ctxt.mem x (Val{bit=mode land bit land resbit;v=StringVal res})
+      H.add ctxt.mem x (Val{bit;v=StringVal res})
     | SendCmd { node; channel; exp } ->
       let level = lookup ctxt.trust_map (node,channel) in
       let Val{bit;v} = eval ctxt exp in
       let mode = getMode () in
-      let v =
-          match v with
-          | IntVal n -> IntVal ((bit land mode)*n)
-          | StringVal s ->
-            StringVal (safeBind (bit land mode) (Array.make (Array.length s) '\000') s) in
       let value = Val{bit=bit land mode;v} in
       let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;value} in
       output_value ctxt.server.output msg;
@@ -337,20 +335,9 @@ let interp (A.Prog{node;decls;chs}) =
   let f (A.Ch{ch;var=(var,_);body;_}) =
     H.add ctxt.handlers ch {var;cmd=body} in
   let g = function
-    | (A.VarDecl{var=(var,_);init;padding=None;_}) ->
+    | (A.VarDecl{var=(var,_);init;_}) ->
       let i = eval ctxt init in
       H.add ctxt.mem var i
-    | (A.VarDecl{var=(var,_);init;padding=Some pad;_}) ->
-      let i = eval ctxt init in
-      let p = eval ctxt pad in
-      begin
-      match i, p with
-      | Val{v=StringVal orig;_}, Val{v=IntVal pad;_} ->
-        let upd = Array.make pad '\000' in
-        let v = StringVal (safeBind 0 orig upd) in
-        H.add ctxt.mem var (Val{bit=1;v})
-      | _ -> raise @@ InterpFatal __LOC__
-      end
     | (A.InputDecl _) ->
       ()
     | (A.ChannelDecl{node;ch;ty;_}) ->

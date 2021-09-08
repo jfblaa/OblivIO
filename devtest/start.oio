@@ -1,5 +1,11 @@
-Alice
+ALICE
+
+var string@{} test := "Hello";
 
 START(int@{} ignored) {
-    print("div",10/0);
+    print(test);
+    oblif 1
+    then test ?= "World";
+    else skip;
+    print(test);
 }

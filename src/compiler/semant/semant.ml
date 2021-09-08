@@ -121,7 +121,12 @@ let transExp ({err;_} as ctxt) =
         | CaretOp -> 
           checkString lty err pos;
           checkString rty err pos;
-          Ty.STRING in
+          Ty.STRING 
+        | PadOp ->
+          checkString lty err pos;
+          checkInt rty err pos;
+          Ty.STRING
+        in
       OpExp{left;oper;right} ^! Ty.Type{base;level}
   in trexp
 
@@ -147,14 +152,15 @@ let transCmd ({err;_} as ctxt) =
       checkBaseType ety varty err pos;
       checkFlowTypePC pc ety varty err pos;
       fromBase @@ BindCmd{var=(var,varty);exp=e}
-    | InputCmd {var;size} ->
+    | InputCmd {var;default} ->
       let varty = lookupVar ctxt var pos in
       let chty = lookupInternal ctxt pos in
-      let size,sizety = e_ty @@ transExp ctxt size in
+      let default,defaultty = e_ty @@ transExp ctxt default in
       checkBaseType chty varty err pos;
       checkFlowTypePC pc chty varty err pos;
-      checkInt sizety err pos;
-      fromBase @@ InputCmd{var=(var,varty);size}
+      checkBaseType defaultty varty err pos;
+      checkFlowTypePC pc defaultty varty err pos;
+      fromBase @@ InputCmd{var=(var,varty);default}
     | SendCmd {node;channel;exp} ->
       let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -202,7 +208,7 @@ let transCh ({gamma;err;_} as ctxt) (A.Ch{ty;ch;var;body;pos}) =
 
 let transDecl ({gamma;input;lambda;err} as ctxt) dec =
   match dec with
-  | A.VarDecl {ty;var;init;padding;pos} ->
+  | A.VarDecl {ty;var;init;pos} ->
     let ty = transTy ty in
     if H.mem gamma var
     then Err.error err pos @@ "variable " ^ var ^ " already declared";
@@ -210,16 +216,7 @@ let transDecl ({gamma;input;lambda;err} as ctxt) dec =
     let init,initty = e_ty @@ transExp ctxt init in
     checkBaseType initty ty err pos;
     checkFlowType initty ty err pos;
-    begin
-    match padding with
-    | Some pad -> 
-      let pad,padty,padlvl = e_ty_lvl @@ transExp ctxt pad in
-      checkInt padty err pos;
-      checkFlow padlvl L.bottom err pos;
-      VarDecl{var=(var,ty);init;padding=Some(pad);pos}
-    | None ->
-      VarDecl{var=(var,ty);init;padding=None;pos}
-    end
+    VarDecl{var=(var,ty);init;pos}
   | A.ChannelDecl {ty;node;ch;pos} ->
     let ty = transTy ty in
     H.add lambda (node,ch) ty;
