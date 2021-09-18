@@ -216,7 +216,7 @@ let interpCmd ctxt =
         | _ -> raise @@ InterpFatal ("type mismatch during bind") in
       H.add ctxt.mem x (Val{bit;v})
     | InputCmd { var=(x,_); default; _ } ->
-      let Val{bit;v} = eval ctxt default in
+      let Val{v;_} = eval ctxt default in
       let arr, len =
         match v with
         | StringVal s -> s, Array.length s
@@ -236,7 +236,7 @@ let interpCmd ctxt =
       
       ctxt.input_buffer <- safeBind (mode land updbit) ctxt.input_buffer buf_upd;
 
-      H.add ctxt.mem x (Val{bit;v=StringVal res})
+      H.add ctxt.mem x (Val{bit=mode land updbit;v=StringVal res})
     | SendCmd { node; channel; exp } ->
       let level = lookup ctxt.trust_map (node,channel) in
       let Val{bit;v} = eval ctxt exp in

@@ -44,11 +44,15 @@ let start json_file =
     ; Int.to_string port 
     ; "..."
     ];
+
+  let granularity = json |> member "granularity" |> to_float in
+  let logbuf = Buffer.create 16 in
   
-  let log msg =
-    print_endline @@ String.concat "" [
-      M.to_string_at_level msg advlevel
-    ] in
+  let rec logger () =
+    Buffer.output_buffer stdout logbuf;
+    flush stdout;
+    Thread.delay granularity;
+    logger () in
 
   let routing_table = H.create 1024 in
 
@@ -67,7 +71,8 @@ let start json_file =
         output_value out_channel msg;
         flush out_channel;
       | M.Relay {receiver;_} as msg ->
-        log msg;
+        let msgstr = M.to_string_at_level msg advlevel ^ "\n" in
+        Buffer.add_string logbuf msgstr;
         let ch = lookup routing_table receiver in
         output_value ch msg;
         flush ch
@@ -77,6 +82,8 @@ let start json_file =
       end;
       loop () in
     loop () in
+  
+  let _ = Thread.create logger () in
 
   (* https://eighty-twenty.org/2012/01/07/simple-networking-with-ocaml *)
   let rec accept_loop sock =

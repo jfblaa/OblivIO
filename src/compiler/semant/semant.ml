@@ -157,9 +157,9 @@ let transCmd ({err;_} as ctxt) =
       let chty = lookupInternal ctxt pos in
       let default,defaultty = e_ty @@ transExp ctxt default in
       checkBaseType chty varty err pos;
-      checkFlowTypePC pc chty varty err pos;
       checkBaseType defaultty varty err pos;
-      checkFlowTypePC pc defaultty varty err pos;
+      checkFlowType chty varty err pos;
+      checkFlowTypePC pc chty chty err pos;
       fromBase @@ InputCmd{var=(var,varty);default}
     | SendCmd {node;channel;exp} ->
       let chty = lookupRemote ctxt node channel pos in
