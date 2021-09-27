@@ -262,12 +262,12 @@ let interpCmd ctxt =
         _I body
       done
     | OblivIfCmd { test; thn; els } ->
-      let Val{v;_} = eval ctxt test in
+      let Val{v;bit} = eval ctxt test in
       let i =
         match v with
         | IntVal n -> Bool.to_int @@ (n <> 0)
         | _ -> 1 in
-      let mode = getMode () in
+      let mode = bit land getMode () in
       ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
       let (~>) cmd_base = A.Cmd{cmd_base;pos} in
       let _S c1 c2 = A.Cmd{cmd_base=A.SeqCmd{c1;c2};pos} in

@@ -51,6 +51,7 @@ let start json_file =
   let rec logger () =
     Buffer.output_buffer stdout logbuf;
     flush stdout;
+    Buffer.clear logbuf;
     Thread.delay granularity;
     logger () in
 
