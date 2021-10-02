@@ -152,15 +152,15 @@ let transCmd ({err;_} as ctxt) =
       checkBaseType ety varty err pos;
       checkFlowTypePC pc ety varty err pos;
       fromBase @@ BindCmd{var=(var,varty);exp=e}
-    | InputCmd {var;default} ->
+    | InputCmd {var;size} ->
       let varty = lookupVar ctxt var pos in
       let chty = lookupInternal ctxt pos in
-      let default,defaultty = e_ty @@ transExp ctxt default in
+      let size,sizety,sizelvl = e_ty_lvl @@ transExp ctxt size in
       checkBaseType chty varty err pos;
-      checkBaseType defaultty varty err pos;
       checkFlowType chty varty err pos;
-      checkFlowTypePC pc chty chty err pos;
-      fromBase @@ InputCmd{var=(var,varty);default}
+      checkInt sizety err pos;
+      checkFlow sizelvl L.bottom err pos;
+      fromBase @@ InputCmd{var=(var,varty);size}
     | SendCmd {node;channel;exp} ->
       let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in

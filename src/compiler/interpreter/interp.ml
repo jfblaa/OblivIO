@@ -205,38 +205,42 @@ let interpCmd ctxt =
       let bit,v =
         match orig,upd with
         | Val{bit=b1;v=IntVal i1}, Val{bit=b2;v=IntVal i2} ->
-          let bit = ((mode lxor 1) land b1) lor (mode land b2) in
-          let mode = mode land b2 in
-          let i = ((mode lxor 1) * i1) lor (mode * i2) in
+          let shouldUpdate = mode land b2 in
+          let bit = ((shouldUpdate lxor 1) land b1) lor shouldUpdate in
+          let i = ((shouldUpdate lxor 1) * i1) lor (shouldUpdate * i2) in
           bit, IntVal i
         | Val{bit=b1;v=StringVal s1}, Val{bit=b2;v=StringVal s2} ->
-          let bit = ((mode lxor 1) land b1) lor (mode land b2) in
-          let s = safeBind (mode land b2) s1 s2 in
+          let shouldUpdate = mode land b2 in
+          let bit = ((shouldUpdate lxor 1) land b1) lor shouldUpdate in
+          let s = safeBind shouldUpdate s1 s2 in
           bit, StringVal s
         | _ -> raise @@ InterpFatal ("type mismatch during bind") in
       H.add ctxt.mem x (Val{bit;v})
-    | InputCmd { var=(x,_); default; _ } ->
-      let Val{v;_} = eval ctxt default in
-      let arr, len =
-        match v with
-        | StringVal s -> s, Array.length s
+    | InputCmd { var=(x,_); size; _ } ->
+      let Val{v=vx;bit=bx} = lookup ctxt.mem x in
+      let Val{v=ne;_} = eval ctxt size in
+      let len, arr =
+        match vx,ne with
+        | StringVal s, IntVal n -> 
+          let len = max (Array.length s) n in
+          let max_len = Array.length ctxt.input_buffer in
+          min len max_len, s
         | _ -> raise @@ InterpFatal __LOC__ in
-      let max_len = Array.length ctxt.input_buffer in
-      let res_len = min len max_len in
-      let upd = Array.sub ctxt.input_buffer 0 res_len in
+
+      let upd = Array.sub ctxt.input_buffer 0 len in
       let updbit = Bool.to_int @@ (upd.(0) <> '\000') in
-      let mode = getMode () in
-      let res = safeBind (mode land updbit) arr upd in
+      let shouldBind = getMode () land updbit in
+      let res = safeBind shouldBind arr upd in
       
-      let blank = Array.make res_len '\000' in
+      let blank = Array.make len '\000' in
       let buf_upd =
         Array.append
-          (Array.sub ctxt.input_buffer res_len (max_len - res_len))
+          (Array.sub ctxt.input_buffer len (len - len))
           blank in
       
-      ctxt.input_buffer <- safeBind (mode land updbit) ctxt.input_buffer buf_upd;
+      ctxt.input_buffer <- safeBind shouldBind ctxt.input_buffer buf_upd;
 
-      H.add ctxt.mem x (Val{bit=mode land updbit;v=StringVal res})
+      H.add ctxt.mem x (Val{bit=bx lor shouldBind;v=StringVal res})
     | SendCmd { node; channel; exp } ->
       let level = lookup ctxt.trust_map (node,channel) in
       let Val{bit;v} = eval ctxt exp in

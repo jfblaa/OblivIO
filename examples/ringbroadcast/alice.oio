@@ -7,18 +7,22 @@ var string@{H} msg_out := "";
 
 START(int@{} i) {
     oblif 0
-    then msg_out := input("" padto 64);
+    then msg_out ?= input(64);
     else skip;
     send(BOB/RCV, msg_out);
 }
 
 RCV(string@{H} msg_in) {
-    oblif ?msg_in and msg_in <> msg_out
+    oblif ?msg_in
     then {
-        print(msg_in);
-        msg_out ?= msg_in;
+        oblif msg_in <> msg_out
+        then {
+            print(msg_in);
+            msg_out ?= msg_in;
+        }
+        else msg_out ?= input(64);
     }
-    else msg_out := input(msg_in);
+    else msg_out ?= input(64);
     
     send(BOB/RCV, msg_out);
 }

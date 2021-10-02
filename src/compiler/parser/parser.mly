@@ -95,8 +95,8 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=paren(exp) DO body=cmd
   { WhileCmd{test; body} }
-| v=var ASSIGN INPUT LPAREN default=exp RPAREN SEMICOLON
-  { InputCmd {var=v;default} }
+| v=var BIND INPUT LPAREN size=exp RPAREN SEMICOLON
+  { InputCmd {var=v;size} }
 | SEND LPAREN node=ID DIVIDE channel=ID COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
