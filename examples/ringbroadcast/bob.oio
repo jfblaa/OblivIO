@@ -5,15 +5,15 @@ input string@{H};
 
 var string@{H} msg_out := "";
 
-RCV(string@{H} msg_in) {
-    oblif ?msg_in
+RCV(string@{H} msg_in : m)
+!{
+    skip;
+}
+?{
+    oblif msg_in <> msg_out
     then {
-        oblif msg_in <> msg_out
-        then {
-            print(msg_in);
-            msg_out ?= msg_in;
-        }
-        else msg_out ?= input(64);
+        print(msg_in);
+        msg_out ?= msg_in;
     }
     else msg_out ?= input(64);
     

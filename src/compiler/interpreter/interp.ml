@@ -2,13 +2,14 @@ module T = Thread
 module M = Common.Message
 module L = Common.Level
 module A = Common.Tabsyn
+module V = Common.Value
 
 module H = Hashtbl
 
 open Common.Value
 open Common.Oper
 
-type handler_info = {var: string; cmd: A.cmd}
+type handler_info = {x: string; y: string; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
 type sync_queue =
@@ -161,27 +162,24 @@ let op oper v1 v2 =
   | PadOp, StringVal s, IntVal n ->
     let upd = Array.make n '\000' in
     StringVal (safeBind 0 s upd)
-  | _ -> raise @@ NotImplemented "binop"
+  | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
 
 let eval {mem;_} =
   let rec _E (A.Exp{exp_base;_}) =
     match exp_base with
-    | A.IntExp i -> Val{bit=1;v=IntVal i}
+    | A.IntExp i -> IntVal i
     | A.StringExp s -> 
       let arr = Array.of_seq @@ String.to_seq s in
-      Val{bit=1;v=StringVal arr}
+      StringVal arr
     | A.VarExp (x,_) -> lookup mem x
-    | A.QuestionExp exp -> 
-      let Val{bit;_} = _E exp in
-      Val{bit=1;v=IntVal bit}
     | A.SizeExp exp ->
       let v = _E exp in
-      Val{bit=1;v=IntVal (sizeof v)}
+      IntVal (size v)
     | A.OpExp {left;oper;right} ->
-      let Val{bit=b1;v=v1} = _E left in
-      let Val{bit=b2;v=v2} = _E right in
+      let v1 = _E left in
+      let v2 = _E right in
       let v = op oper v1 v2 in
-      Val{bit=b1 land b2;v}
+      v
   in _E
 
 let interpCmd ctxt =
@@ -195,83 +193,78 @@ let interpCmd ctxt =
     | SeqCmd {c1;c2} ->
       _I c1;
       _I c2
-    | AssignCmd { var=(x,_); exp } ->
+    | AssignCmd { var=(x,_); exp } when getMode () = 1 ->
       let v = eval ctxt exp in
       H.add ctxt.mem x v
+    | AssignCmd _ ->
+      ()
     | BindCmd { var=(x,_); exp } ->
       let orig = lookup ctxt.mem x in
       let upd = eval ctxt exp in
       let mode = getMode () in
-      let bit,v =
+      let v =
         match orig,upd with
-        | Val{bit=b1;v=IntVal i1}, Val{bit=b2;v=IntVal i2} ->
-          let shouldUpdate = mode land b2 in
-          let bit = ((shouldUpdate lxor 1) land b1) lor shouldUpdate in
-          let i = ((shouldUpdate lxor 1) * i1) lor (shouldUpdate * i2) in
-          bit, IntVal i
-        | Val{bit=b1;v=StringVal s1}, Val{bit=b2;v=StringVal s2} ->
-          let shouldUpdate = mode land b2 in
-          let bit = ((shouldUpdate lxor 1) land b1) lor shouldUpdate in
-          let s = safeBind shouldUpdate s1 s2 in
-          bit, StringVal s
+        | IntVal i1, IntVal i2 ->
+          let i = ((mode lxor 1) * i1) lor (mode * i2) in
+          IntVal i
+        | StringVal s1, StringVal s2 ->
+          let s = safeBind mode s1 s2 in
+          StringVal s
         | _ -> raise @@ InterpFatal ("type mismatch during bind") in
-      H.add ctxt.mem x (Val{bit;v})
+      H.add ctxt.mem x v
     | InputCmd { var=(x,_); size; _ } ->
-      let Val{v=vx;bit=bx} = lookup ctxt.mem x in
-      let Val{v=ne;_} = eval ctxt size in
-      let len, arr =
+      let vx = lookup ctxt.mem x in
+      let ne = eval ctxt size in
+      let len,res_len, arr =
         match vx,ne with
         | StringVal s, IntVal n -> 
           let len = max (Array.length s) n in
           let max_len = Array.length ctxt.input_buffer in
-          min len max_len, s
+          len,min len max_len, s
         | _ -> raise @@ InterpFatal __LOC__ in
 
-      let upd = Array.sub ctxt.input_buffer 0 len in
+      let upd = Array.sub ctxt.input_buffer 0 res_len in
       let updbit = Bool.to_int @@ (upd.(0) <> '\000') in
       let shouldBind = getMode () land updbit in
       let res = safeBind shouldBind arr upd in
       
-      let blank = Array.make len '\000' in
+      let blank = Array.make res_len '\000' in
       let buf_upd =
         Array.append
-          (Array.sub ctxt.input_buffer len (len - len))
+          (Array.sub ctxt.input_buffer res_len (len - res_len))
           blank in
       
       ctxt.input_buffer <- safeBind shouldBind ctxt.input_buffer buf_upd;
 
-      H.add ctxt.mem x (Val{bit=bx lor shouldBind;v=StringVal res})
+      H.add ctxt.mem x (StringVal res)
     | SendCmd { node; channel; exp } ->
       let level = lookup ctxt.trust_map (node,channel) in
-      let Val{bit;v} = eval ctxt exp in
-      let mode = getMode () in
-      let value = Val{bit=bit land mode;v} in
-      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;value} in
+      let value = eval ctxt exp in
+      let bit = getMode () in
+      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;bit;value} in
       output_value ctxt.server.output msg;
       flush ctxt.server.output
     | IfCmd { test; thn; els } ->
-      let Val{v;_} = eval ctxt test in
       begin
-      match v with
+      match eval ctxt test with
       | IntVal 0 -> _I els
       | _ -> _I thn
       end
     | WhileCmd { test; body } ->
       while
-        let Val{v;_} = eval ctxt test in
-        match v with
+        match eval ctxt test with
         | IntVal 0 -> false
         | _ -> true
       do
         _I body
       done
     | OblivIfCmd { test; thn; els } ->
-      let Val{v;bit} = eval ctxt test in
+      let v = eval ctxt test in
       let i =
         match v with
         | IntVal n -> Bool.to_int @@ (n <> 0)
         | _ -> 1 in
-      let mode = bit land getMode () in
+      let mode = getMode () in
       ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
       let (~>) cmd_base = A.Cmd{cmd_base;pos} in
       let _S c1 c2 = A.Cmd{cmd_base=A.SeqCmd{c1;c2};pos} in
@@ -285,24 +278,33 @@ let interpCmd ctxt =
       end
     | PrintCmd { info; exp } ->
       let mode = getMode () in
-      let Val{bit;v} = eval ctxt exp in
+      let v = eval ctxt exp in
       let intro =
         match info with
         | Some s -> s ^ ": "
         | None -> "" in
-      if mode land bit = 1 then print_endline @@ intro ^ base_to_string v;
+      if mode = 1 then print_endline @@ intro ^ V.to_string v;
       in
   _I
 
 let rec loop ctxt =
   begin
   match input_value ctxt.server.input with
-  | M.Relay{channel;value;_} ->
+  | M.Relay{channel;bit;value;_} ->
     begin
       match H.find_opt ctxt.handlers channel with
-      | Some {var;cmd} ->
-        H.add ctxt.mem var value;
-        interpCmd ctxt cmd
+      | Some {x;y;decls;prelude;body} ->
+        H.add ctxt.mem x value;
+        H.add ctxt.mem y (V.IntVal (V.size value));
+        begin match prelude with
+        | Some prelude ->
+          ctxt.mode <- [1;bit];
+          interpCmd ctxt prelude;
+          interpCmd ctxt (A.Cmd{cmd_base=A.PopCmd;pos=Lexing.dummy_pos});
+        | None ->
+          ctxt.mode <- [bit]
+        end;
+        interpCmd ctxt body
       | None -> ()
     end
   | _ -> ()
@@ -330,14 +332,14 @@ let interp (A.Prog{node;decls;chs}) =
       ; queue = []
       }
     ; input_buffer = Array.make 256 '\000'
-    ; mode = [1]
+    ; mode = []
     ; mem = H.create 1024
     ; handlers = H.create 1024
     ; trust_map = H.create 1024
     ; server = {input;output}
     } in
-  let f (A.Ch{ch;var=(var,_);body;_}) =
-    H.add ctxt.handlers ch {var;cmd=body} in
+  let f (A.Ch{ch;x=(x,_);y=(y,_);decls;prelude;body;_}) =
+    H.add ctxt.handlers ch {x;y;decls;prelude;body} in
   let g = function
     | (A.VarDecl{var=(var,_);init;_}) ->
       let i = eval ctxt init in

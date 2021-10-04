@@ -1,35 +1,29 @@
 
-type basevalue =
-  | IntVal of int
-  | StringVal of char array
+type value =
+| IntVal of int
+| StringVal of char array
+| PairVal of value * value
+| ArrayVal of value array
 
-type value = Val of {bit: int; v: basevalue}
-
-let base_to_string = function
-  | StringVal s -> "\"" ^ (s |> Array.to_seq |> String.of_seq) ^ "\""
-  | IntVal n -> Int.to_string n
-
-let sizeof (Val{v;_}) =
-  match v with
+let rec size = function
   | IntVal _ -> 8
   | StringVal s -> Array.length s
+  | PairVal (a,b) -> size a + size b
+  | ArrayVal arr -> Array.fold_left (fun acc x -> acc + size x) 0 arr
 
-let to_string (Val{bit;v} as v') =
-  String.concat ""
-  [ "{bit:"
-  ; Int.to_string bit
-  ; ", size:"
-  ; Int.to_string @@ sizeof v'
-  ; ", v:"
-  ; base_to_string v
-  ; "}"
-  ]
-
-let to_string_enc v' =
-  String.concat ""
-  [ "{bit:#, size:"
-  ; Int.to_string @@ sizeof v'
-  ; ", v:"
-  ; "<#####>"
-  ; "}"
-  ]
+let rec to_string = function
+  | StringVal s -> "\"" ^ (s |> Array.to_seq |> String.of_seq) ^ "\""
+  | IntVal n -> Int.to_string n
+  | PairVal (a,b) -> String.concat "" [
+      "("
+    ; to_string a
+    ; ","
+    ; to_string b
+    ; ")"
+    ]
+  | ArrayVal arr ->
+    let data =
+      arr |> Array.to_list
+          |> List.map to_string
+          |> String.concat "," in
+    "[" ^ data ^ "]"

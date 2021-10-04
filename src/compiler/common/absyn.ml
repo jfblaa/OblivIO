@@ -1,27 +1,35 @@
 type pos = Lexing.position 
 type level = Level.level
+type ty = Types.ty
+type basetype = Types.basetype
 
 include Oper
 
 type program = Prog of { node: string; decls: decl list; chs: ch list }
-and ty
-  = IntType of level
-  | StringType of level
 and decl
-  = VarDecl of { ty: ty; var: var; init: exp; pos: pos }
+  = VarDecl of { ty: ty; x: string; init: exp; pos: pos }
   | ChannelDecl of { ty: ty; node: string; ch: string; pos: pos }
-  | InputDecl of {ty: ty; pos: pos }
+  | InputDecl of { ty: ty; pos: pos }
+and hldecl = LocalDecl of { ty: ty; x: string; init: exp; pos: pos }
 and ch
-  = Ch of { ty: ty; ch: string; var: var; body: cmd; pos: pos }
-and var = string
+  = Ch of { ty: ty; ch: string; x: string; y: string; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
+and var = Var of { var_base: var_base; pos: pos}
+and var_base
+  = SimpleVar of string
+  | SubscriptVar of {var: var; exp: exp}
 and exp = Exp of { exp_base: exp_base; pos: pos }
+and proj
+  = Fst
+  | Snd
 and exp_base
   = IntExp of int
   | StringExp of string
   | VarExp of var
-  | QuestionExp of exp
+  | ProjExp of {proj: proj; exp:exp}
   | SizeExp of exp
-  | OpExp of { left: exp; oper: oper; right: exp  }
+  | OpExp of { left: exp; oper: oper; right: exp }
+  | PairExp of (exp*exp)
+  | ArrayExp of exp list
 and cmd = Cmd of { cmd_base: cmd_base; pos: pos }
 and cmd_base
   = SkipCmd

@@ -35,8 +35,8 @@ let semant prog =
   then res
   else raise CompileError
 
-let interp progs =
-  Interpreter.Interp.interp progs
+let interp _ = ()
+  (*Interpreter.Interp.interp prog*)
   
 let client file =
   let exitCode = ref 0 in
@@ -57,17 +57,13 @@ let src_arg =
   let doc = "Source file $(docv)." in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"FILE" ~doc)
 
-let server_arg =
-  let doc = "Start OblivIO interpreter in $(docv) mode." in
-  Arg.(value & flag & info ["s";"server"] ~docv:"SERVER" ~doc)
-
-let check file is_server =
-  if is_server
-  then Interpreter.Server.start file
+let check file =
+  if Filename.extension file |> String.equal ".json"
+  then ()(*Interpreter.Server.start file*)
   else client file
 
 let main_t =
-  Term.(const check $ src_arg $ server_arg)
+  Term.(const check $ src_arg)
 
 let info =
   let doc = "OblivIO interpreter." in

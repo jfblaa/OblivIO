@@ -1,12 +1,10 @@
 
-type basevalue =
+type value =
   | IntVal of int
   | StringVal of char array
+  | PairVal of value * value
+  | ArrayVal of value array
 
-type value = Val of {bit: int; v: basevalue}
+val size: value -> int
 
-val sizeof: value -> int
-
-val base_to_string: basevalue -> string
 val to_string: value -> string
-val to_string_enc: value -> string

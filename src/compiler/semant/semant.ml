@@ -13,6 +13,7 @@ module H = Hashtbl
 
 type context 
   = { gamma : (string, Ty.ty) H.t
+    ; delta : (string, Ty.ty) H.t
     ; mutable input: Ty.ty option
     ; lambda : (string * string, Ty.ty) H.t
     ; err :  Err.errorenv 
@@ -26,10 +27,14 @@ let errTy err pos msg =
   Err.error err pos @@ msg;
   _bot Ty.ERROR
 
-let lookupVar ({gamma;err;_}) v pos = 
-  match H.find_opt gamma v with
-  | Some ty -> ty
-  | None -> errTy err pos @@ "undeclared variable " ^ v
+type varloc = LOCAL | STORE
+let lookupVar ({gamma;delta;err;_}) v pos = 
+  match H.find_opt delta v with
+  | Some ty -> LOCAL,ty
+  | None ->
+    match H.find_opt gamma v with
+    | Some ty -> STORE, ty
+    | None -> LOCAL, errTy err pos @@ "undeclared variable " ^ v
 
 let lookupInternal ({input;err;_}) pos = 
     match input with
@@ -43,6 +48,19 @@ let lookupRemote ({lambda;err;_}) node ch pos =
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
+let v_ty = function
+  | (LocalVar{ty;_} as v) -> (v,ty)
+  | (StoreVar{ty;_} as v) -> (v,ty)
+let v_ty_loc = function
+  | (LocalVar{ty;_} as v) -> (v,ty,LOCAL)
+  | (StoreVar{ty;_} as v) -> (v,ty,STORE)
+let v_ty_lvl = function
+  | (LocalVar{ty;_} as v) -> (v,ty,T.level ty)
+  | (StoreVar{ty;_} as v) -> (v,ty,T.level ty)
+
+let v_ty_lvl_loc = function
+  | (LocalVar{ty;_} as v) -> (v,ty,T.level ty,LOCAL)
+  | (StoreVar{ty;_} as v) -> (v,ty,T.level ty,STORE)
 
 let isSameBase t1 t2 =
   match Ty.base t1, Ty.base t2 with
@@ -88,23 +106,20 @@ let checkString t err pos =
   | Ty.STRING -> ()
   | b -> Err.error err pos @@ "string required, " ^ Ty.base_to_string b ^ " provided"
 
-exception NotImplemented
+exception NotImplemented of string
 
-let transExp ({err;_} as ctxt) =
+let rec transExp ({err;_} as ctxt) =
   let rec trexp (A.Exp{exp_base;pos}) =
     let (^!) exp_base ty = Exp{exp_base;ty;pos} in
     match exp_base with
     | IntExp n -> IntExp n ^! _bot Ty.INT
     | StringExp s -> StringExp s ^! _bot Ty.STRING
     | VarExp v ->
-      let ty = lookupVar ctxt v pos in
-      VarExp (v, ty) ^! ty
+      let v,ty = v_ty @@ transVar ctxt v in
+      VarExp v ^! ty
     | SizeExp e ->
       let e = trexp e in
       SizeExp e ^! _bot Ty.INT
-    | QuestionExp e ->
-      let (e,ety) = e_ty @@ trexp e in
-      QuestionExp e ^! Ty.Type{base=Ty.INT; level=Ty.level ety}
     | OpExp {left;oper;right} ->
       let (left,lty) = e_ty @@ trexp left in
       let (right,rty) = e_ty @@ trexp right in
@@ -128,7 +143,63 @@ let transExp ({err;_} as ctxt) =
           Ty.STRING
         in
       OpExp{left;oper;right} ^! Ty.Type{base;level}
+    | ProjExp {proj;exp} -> 
+      let (exp,ty,level) = e_ty_lvl @@ trexp exp in
+      let proj,ty =
+        match proj,T.base ty with
+        | Fst, T.PAIR (base,_) -> Fst, T.Type{base;level}
+        | Snd, T.PAIR (_,base) -> Snd, T.Type{base;level}
+        | Fst, _ -> Fst, errTy err pos @@ "not a pair type " ^ T.to_string ty
+        | Snd, _ -> Snd, errTy err pos @@ "not a pair type " ^ T.to_string ty in
+      ProjExp{proj;exp} ^! ty
+    | PairExp (a,b) ->
+      let (a,aty,alvl) = e_ty_lvl @@ trexp a in
+      let (b,bty,blvl) = e_ty_lvl @@ trexp b in
+      let base = T.PAIR (T.base aty,T.base bty) in
+      let level = L.lub alvl blvl in
+      PairExp (a,b) ^! T.Type{base;level}
+    | ArrayExp arr ->
+      let ty,lvl = match arr with
+      | hd::_ ->
+        let _, ty,lvl = e_ty_lvl @@ transExp ctxt hd in
+        ty, lvl
+      | _ ->
+        errTy err pos "array cannot be empty", L.bottom in
+      let f lvl exp =
+        let e,ety,elvl = e_ty_lvl @@ transExp ctxt exp in
+        checkBaseType ty ety err pos;
+        L.lub lvl elvl, e in
+      let level, arr = List.fold_left_map f lvl arr in
+      let base = T.ARRAY (T.base ty) in
+      ArrayExp arr ^! T.Type{base;level}
+      
   in trexp
+and transVar ({err;_} as ctxt) =
+  let rec trvar (A.Var{var_base;pos}) =
+    let (^!) var_base ty = LocalVar{var_base;ty;pos} in
+    let (^@) var_base ty = StoreVar{var_base;ty;pos} in
+    match var_base with
+    | SimpleVar x ->
+      let varloc, ty = lookupVar ctxt x pos in
+      begin
+      match varloc with
+        | LOCAL -> SimpleVar x ^! ty
+        | STORE -> SimpleVar x ^@ ty
+      end
+    | SubscriptVar {var;exp} ->
+      let var,vty,vlvl,loc = v_ty_lvl_loc @@ trvar var in
+      let exp,ety = e_ty @@ transExp ctxt exp in
+      checkInt ety err pos;
+      checkFlowType ety vty err pos; 
+      let t = match T.base vty with
+        | T.ARRAY base -> T.Type{base;level=vlvl}
+        | _ -> errTy err pos @@ "variable type not an array type: " ^ T.to_string vty in
+      begin
+      match loc with
+      | LOCAL -> SubscriptVar{var;exp} ^! t
+      | STORE -> SubscriptVar{var;exp} ^@ t
+      end
+  in trvar
 
 let transCmd ({err;_} as ctxt) =
   let rec trcmd pc (A.Cmd{cmd_base;pos}) =
@@ -140,27 +211,32 @@ let transCmd ({err;_} as ctxt) =
       let c2 = trcmd pc c2 in
       fromBase @@ SeqCmd {c1;c2}
     | AssignCmd {var;exp} ->
-      let varty = lookupVar ctxt var pos in
+      let var,varty,loc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkLowPC pc err pos;
+      begin
+        match loc with
+        | LOCAL -> ()
+        | STORE -> 
+          checkLowPC pc err pos
+      end;
       checkBaseType ety varty err pos;
       checkFlowType ety varty err pos;
-      fromBase @@ AssignCmd{var=(var,varty);exp=e}
+      fromBase @@ AssignCmd{var;exp=e}
     | BindCmd {var;exp} ->
-      let varty = lookupVar ctxt var pos in
+      let var,varty = v_ty @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
       checkBaseType ety varty err pos;
       checkFlowTypePC pc ety varty err pos;
-      fromBase @@ BindCmd{var=(var,varty);exp=e}
+      fromBase @@ BindCmd{var;exp=e}
     | InputCmd {var;size} ->
-      let varty = lookupVar ctxt var pos in
+      let var,varty = v_ty @@ transVar ctxt var in
       let chty = lookupInternal ctxt pos in
       let size,sizety,sizelvl = e_ty_lvl @@ transExp ctxt size in
       checkBaseType chty varty err pos;
       checkFlowType chty varty err pos;
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
-      fromBase @@ InputCmd{var=(var,varty);size}
+      fromBase @@ InputCmd{var;size}
     | SendCmd {node;channel;exp} ->
       let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -191,38 +267,27 @@ let transCmd ({err;_} as ctxt) =
       fromBase @@ PrintCmd{info;exp}
   in trcmd
 
-let transTy ty =
-  let (^!) base level = Ty.Type{base;level} in
-  match ty with
-  | A.IntType level -> Ty.INT ^! level
-  | A.StringType level -> Ty.STRING ^! level
+let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty;x;init;pos}) =
+  H.add delta x ty;
+  let init,initty = e_ty @@ transExp ctxt init in
+  checkBaseType initty ty err pos;
+  checkFlowType initty ty err pos;
+  LocalDecl{x;ty;init;pos}
 
-let transCh ({gamma;err;_} as ctxt) (A.Ch{ty;ch;var;body;pos}) =
-  let ty = transTy ty in
-  if H.mem gamma var
-  then Err.error err pos @@ "variable " ^ var ^ " already declared";
-  H.add gamma var ty;
-  let body = transCmd ctxt L.bottom body in
-  H.remove gamma var;
-  Ch{ty;ch;var=(var,ty);body;pos}
-
-let transDecl ({gamma;input;lambda;err} as ctxt) dec =
+let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
   match dec with
-  | A.VarDecl {ty;var;init;pos} ->
-    let ty = transTy ty in
-    if H.mem gamma var
-    then Err.error err pos @@ "variable " ^ var ^ " already declared";
-    H.add gamma var ty;
+  | A.VarDecl {ty;x;init;pos} ->
+    if H.mem gamma x
+    then Err.error err pos @@ "variable " ^ x ^ " already declared";
+    H.add gamma x ty;
     let init,initty = e_ty @@ transExp ctxt init in
     checkBaseType initty ty err pos;
     checkFlowType initty ty err pos;
-    VarDecl{var=(var,ty);init;pos}
+    VarDecl{x;ty;init;pos}
   | A.ChannelDecl {ty;node;ch;pos} ->
-    let ty = transTy ty in
     H.add lambda (node,ch) ty;
     ChannelDecl{node;ch;ty;pos}
   | A.InputDecl{ty;pos} ->
-    let ty = transTy ty in
     begin
     match input with
     | Some _ -> Err.error err pos @@ "input channel already declared"
@@ -231,16 +296,24 @@ let transDecl ({gamma;input;lambda;err} as ctxt) dec =
     checkString ty err pos;
     InputDecl{ty;pos}
 
+let transCh ({delta;_} as ctxt) (A.Ch{ty;ch;x;y;decls;prelude;body;pos}) =
+  H.add delta x ty;
+  let sizety = T.Type{base=T.INT;level=L.bottom} in
+  H.add delta y sizety;
+  let decls = List.map (transLocal ctxt) decls in
+  let prelude = Option.map (transCmd ctxt L.bottom) prelude in
+  let body = transCmd ctxt (T.level ty) body in
+  H.clear delta;
+  Ch{ty;ch;x;y;decls;prelude;body;pos}
+
 let transProg (A.Prog{node;decls;chs}) =
   let ctxt = 
     { gamma = H.create 1024
+    ; delta = H.create 1024
     ; input = None
     ; lambda = H.create 1024
     ; err = Err.initial_env
     } in
-  (*let enter (A.Ch{ty;node;ch;_}) =
-    H.add ctxt.lambda (node,ch) (transTy ty) in
-  List.iter enter chs;*)
   let decls = List.map (transDecl ctxt) decls in
   let chs = List.map (transCh ctxt) chs in
   not (Err.any_errors ctxt.err), Prog{node;decls;chs}

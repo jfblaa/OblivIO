@@ -1,6 +1,7 @@
 %{
   open Common.Absyn
-  module Level = Common.Level
+  module L = Common.Level
+  module T = Common.Types
 %}
 
 %token EOF
@@ -8,10 +9,11 @@
 %token <int> INT
 %token <string> STRING
 %token VAR CHANNEL
-%token SEMICOLON COMMA
+%token SEMICOLON COMMA SEPARATOR
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
-%token QMARK SIZE AT PRINT PADTO
+%token FST SND
+%token COLON SIZE AT PRINT PADTO
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
@@ -22,7 +24,8 @@
 %left CARET PADTO
 %left PLUS MINUS
 %left TIMES DIVIDE
-%nonassoc UMINUS QMARK
+%right FST SND
+%nonassoc UMINUS
 
 %start <Common.Absyn.program> program  
 
@@ -32,7 +35,6 @@
 %inline brack(X): LBRACK x=X RBRACK { x }
 %inline slist(SEP,X): l=separated_list(SEP,X) { l }
 %inline spair(X,SEP,Y): p=separated_pair(X,SEP,Y) { p }
-%inline angled(X): LT x=X GT { x }
 
 (* binop *)
 %inline op:
@@ -58,19 +60,29 @@ binop_exp:
   { OpExp{left; oper; right} }
 
 lvl:
-| ls=brace(slist(COMMA,ID))   { Level.of_list ls }
+| ls=brace(slist(COMMA,ID))   { L.of_list ls }
+
+var_base:
+| x=ID { SimpleVar x}
+| var=var exp=brack(exp)
+  { SubscriptVar {var;exp} }
 
 var:
-| id=ID   { id }
+| var_base=var_base { Var {var_base; pos=$startpos} }
 
 (* Expressions *)
 exp_base:
 | i=INT             { IntExp i }
 | s=STRING          { StringExp s }
-| x=ID              { VarExp x }
-| QMARK e=exp       { QuestionExp e }
+| v=var             { VarExp v }
 | SIZE e=paren(exp) { SizeExp e }
 | e=binop_exp       { e }
+| FST exp=exp       { ProjExp {proj=Fst; exp} }
+| SND exp=exp       { ProjExp {proj=Snd; exp} }
+| pair=paren(spair(exp,COMMA,exp))
+  { PairExp pair }
+| arr=brack(separated_nonempty_list(COMMA,exp))
+  { ArrayExp arr }
 
 exp:
 | e=exp_base          { Exp {exp_base=e; pos=$startpos} }
@@ -112,21 +124,41 @@ cmd:
 | c=brace(cmd_base_seq)
   { Cmd {cmd_base=c; pos=$startpos} }
 
+basetype:
+| INTTYPE
+  { T.INT }
+| STRINGTYPE
+  { T.STRING }
+| LPAREN b1=basetype TIMES b2=basetype RPAREN
+  { T.PAIR (b1,b2) }
+| b=basetype LBRACK RBRACK
+  { T.ARRAY b }
+
 type_anno:
-| INTTYPE AT lvl=lvl            { IntType lvl }
-| STRINGTYPE AT lvl=lvl         { StringType lvl }
+| base=basetype AT level=lvl  { T.Type{base;level} }
 
 decl:
-| VAR ty=type_anno var=var ASSIGN init=exp SEMICOLON
-  { VarDecl {ty; var; init; pos=$startpos} }
+| VAR ty=type_anno x=ID ASSIGN init=exp SEMICOLON
+  { VarDecl {ty; x; init; pos=$startpos} }
 | CHANNEL ty=type_anno node=ID DIVIDE ch=ID SEMICOLON
   { ChannelDecl {ty; node; ch; pos=$startpos} }
 | INPUT ty=type_anno SEMICOLON
   { InputDecl {ty; pos=$startpos} }
 
+%inline localdecl:
+| VAR ty=type_anno x=ID ASSIGN init=exp SEMICOLON
+  { LocalDecl {ty; x; init; pos=$startpos} }
+
+%inline localdecls:
+|                        { [] }
+| l=localdecl+ SEPARATOR { l }
+
+%inline prelude:
+| cmd=cmd_seq SEPARATOR { cmd }
+
 ch:
-| ch=ID p=paren(pair(type_anno,var)) body=brace(cmd_seq)
-  { Ch {ty=fst p;ch;var=snd p;body;pos=$startpos} }
+| ch=ID LPAREN ty=type_anno x=ID COLON y=ID RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
+  { Ch {ty;ch;x;y;decls;prelude;body;pos=$startpos} }
 
 (* Top-level *)
 program:

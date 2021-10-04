@@ -4,94 +4,110 @@ channel int@{H} ALICE/AUCTION_STATUS;
 channel int@{H} BOB/AUCTION_STATUS;
 channel int@{H} CAROL/AUCTION_STATUS;
 
-channel int@{H} ALICE/AUCTION_WON;
-channel int@{H} ALICE/AUCTION_LOST;
-channel int@{H} BOB/AUCTION_WON;
-channel int@{H} BOB/AUCTION_LOST;
-channel int@{H} CAROL/AUCTION_WON;
-channel int@{H} CAROL/AUCTION_LOST;
+channel string@{H} ALICE/AUCTION_WINNER_NAME;
+channel int@{H} ALICE/AUCTION_WINNER_BID;
+channel string@{H} BOB/AUCTION_WINNER_NAME;
+channel int@{H} BOB/AUCTION_WINNER_BID;
+channel string@{H} CAROL/AUCTION_WINNER_NAME;
+channel int@{H} CAROL/AUCTION_WINNER_BID;
 
 var int@{} counter := 3000;
 var int@{H} winning_bid := 0;
 var string@{H} winning_name := "";
 
-START(int@{} i) {
+START(int@{} i : m)
+!{
     send(ALICE/AUCTION_STATUS,winning_bid);
     send(BOB/AUCTION_STATUS,winning_bid);
     send(CAROL/AUCTION_STATUS,winning_bid);
 }
+?{
+    skip;
+}
 
-BID_ALICE(int@{H} bid) {
+BID_ALICE(int@{H} bid : m)
+!{
+    counter := counter - 1;
+    if counter > 0
+    then skip;
+    else {
+        send(ALICE/AUCTION_WINNER_NAME,winning_name);
+        send(ALICE/AUCTION_WINNER_BID,winning_bid);
+    }
+}
+?{
     if counter > 0
     then {
-        oblif ?bid 
-        then
-            oblif winning_bid < bid
-            then {
-                winning_bid ?= bid;
-                winning_name ?= "Alice";
-            }
-            else skip;
+        oblif winning_bid < bid
+        then {
+            winning_bid ?= bid;
+            winning_name ?= "Alice";
+            bid ?= -1;
+        }
         else {
             oblif winning_name <> "Alice"
-            then send(ALICE/AUCTION_STATUS,winning_bid);
-            else skip;
+            then bid ?= winning_bid;
+            else bid ?= -1;
         }
-        counter := counter - 1;
+        send(ALICE/AUCTION_STATUS,bid);
     }
-    else {
-        oblif winning_name = "Alice"
-        then send(ALICE/AUCTION_WON,winning_bid);
-        else send(ALICE/AUCTION_LOST,winning_bid);
-    }
+    else skip;
 }
 
-BID_BOB(int@{H} bid) {
+BID_BOB(int@{H} bid : m)
+!{
+    counter := counter - 1;
+    if counter > 0
+    then skip;
+    else {
+        send(BOB/AUCTION_WINNER_NAME,winning_name);
+        send(BOB/AUCTION_WINNER_BID,winning_bid);
+    }
+}
+?{
     if counter > 0
     then {
-        oblif ?bid
-        then
-            oblif winning_bid < bid
-            then {
-                winning_bid ?= bid;
-                winning_name ?= "Bob";
-            }
-            else skip;
+        oblif winning_bid < bid
+        then {
+            winning_bid ?= bid;
+            winning_name ?= "Bob";
+            bid ?= -1;
+        }
         else {
             oblif winning_name <> "Bob"
-            then send(BOB/AUCTION_STATUS,winning_bid);
-            else skip;
+            then bid ?= winning_bid;
+            else bid ?= -1;
         }
-        counter := counter - 1;
+        send(BOB/AUCTION_STATUS,bid);
     }
-    else {
-        oblif winning_name = "Bob"
-        then send(BOB/AUCTION_WON,winning_bid);
-        else send(BOB/AUCTION_LOST,winning_bid);
-    }
+    else skip;
 }
 
-BID_CAROL(int@{H} bid) {
+BID_CAROL(int@{H} bid : m)
+!{
+    counter := counter - 1;
+    if counter > 0
+    then skip;
+    else {
+        send(CAROL/AUCTION_WINNER_NAME,winning_name);
+        send(CAROL/AUCTION_WINNER_BID,winning_bid);
+    }
+}
+?{
     if counter > 0
     then {
-        oblif ?bid
-        then
-            oblif winning_bid < bid
-            then {
-                winning_bid ?= bid;
-                winning_name ?= "Carol";
-            }
-            else skip;
+        oblif winning_bid < bid
+        then {
+            winning_bid ?= bid;
+            winning_name ?= "Carol";
+            bid ?= -1;
+        }
         else {
             oblif winning_name <> "Carol"
-            then send(CAROL/AUCTION_STATUS,winning_bid);
-            else skip;
+            then bid ?= winning_bid;
+            else bid ?= -1;
         }
-        counter := counter - 1;
+        send(CAROL/AUCTION_STATUS,bid);
     }
-    else {
-        oblif winning_name = "Carol"
-        then send(CAROL/AUCTION_WON,winning_bid);
-        else send(CAROL/AUCTION_LOST,winning_bid);
-    }
+    else skip;
 }

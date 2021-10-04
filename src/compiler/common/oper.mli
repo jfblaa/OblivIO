@@ -4,3 +4,5 @@ type oper
   | AndOp | OrOp
   | CaretOp
   | PadOp
+
+val to_string : oper -> string

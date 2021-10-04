@@ -4,16 +4,33 @@ var int@{H} max_bid := 350;
 
 channel int@{H} AUCTIONHOUSE/BID_BOB;
 
-AUCTION_STATUS(int@{H} winning_bid) {
+AUCTION_STATUS(int@{H} winning_bid : m)
+!{
+    skip;
+}
+?{
     oblif winning_bid < max_bid
-    then send(AUCTIONHOUSE/BID_BOB,winning_bid+1);
+    then {
+        oblif winning_bid <> -1
+        then winning_bid ?= winning_bid+1;
+        else skip;
+        send(AUCTIONHOUSE/BID_BOB,winning_bid);
+    }
     else skip;
 }
 
-AUCTION_WON(int@{H} amount) {
-    print("Won auction with a bid of",amount);
+AUCTION_WINNER_NAME(string@{H} name : m)
+!{
+    skip;
+}
+?{
+    print("Auction won by",name);
 }
 
-AUCTION_LOST(int@{H} amount) {
-    print("Lost the auction. Winning bid was",amount);
+AUCTION_WINNER_BID(int@{H} amount : m)
+!{
+    skip;
+}
+?{
+    print("Winning bid was",amount);
 }

@@ -1,13 +1,6 @@
-Server
+Alice
 
-variable string@{H} password := "password123";
-variable string@{H} guess := "";
-variable int@{H} token := 1234567890;
-
-remote int@{H} ALICE/TOKEN;
-remote string@{H} ALICE/FAIL;
-
-string@{H} CHECK_PWD(guess) {
+CHECK_PWD(string@{H} guess : m) {
     obliv if guess = password
     then send(ALICE/TOKEN,token);
     else send(ALICE/FAIL,"LOGIN FAILED");

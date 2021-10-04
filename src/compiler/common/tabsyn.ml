@@ -7,20 +7,32 @@ include Oper
 
 type program = Prog of { node: string; decls: decl list; chs: ch list }
 and decl
-  = VarDecl of { var: var; init: exp; pos: pos }
+  = VarDecl of { x: string; ty: T.ty; init: exp; pos: pos }
   | ChannelDecl of { node: string; ch: string; ty: T.ty; pos: pos }
   | InputDecl of {ty: T.ty; pos: pos }
+and hldecl = LocalDecl of { x: string; ty: T.ty; init: exp; pos: pos }
 and ch
-  = Ch of { ty: Types.ty; ch: string; var: var; body: cmd; pos: pos }
-and var = string * T.ty
+  = Ch of { ty: T.ty; ch: string; x: string; y: string; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
+and var
+  = LocalVar of { var_base: var_base; ty: T.ty; pos: pos }
+  | StoreVar of { var_base: var_base; ty: T.ty; pos: pos }
+and var_base =
+  | SimpleVar of string
+  | SubscriptVar of { var: var; exp: exp }
 and exp = Exp of { exp_base: exp_base; ty: T.ty; pos: pos }
+and proj
+  = Fst
+  | Snd
 and exp_base
   = IntExp of int
   | StringExp of string
   | VarExp of var
-  | QuestionExp of exp
+  | ProjExp of {proj: proj; exp: exp}
   | SizeExp of exp
-  | OpExp of { left: exp; oper: oper; right: exp  }
+  | OpExp of { left: exp; oper: oper; right: exp }
+  | PairExp of (exp*exp)
+  | ArrayExp of exp list
+  | ErrorExp
 and cmd = Cmd of { cmd_base: cmd_base; pos: pos }
 and cmd_base
   = SkipCmd
