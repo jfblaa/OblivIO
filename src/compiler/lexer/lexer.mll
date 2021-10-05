@@ -19,6 +19,7 @@ rule token = parse
 | '\n'                { Lexing.new_line lexbuf; token lexbuf }
 | eof                 { EOF }
 | ','                 { COMMA }
+| '.'                 { DOT }
 | ';'                 { SEMICOLON }
 | ";;"                { SEPARATOR }
 | '('                 { LPAREN }
@@ -27,11 +28,12 @@ rule token = parse
 | '}'                 { RBRACE }
 | '['                 { LBRACK }
 | ']'                 { RBRACK }
+| "->"                { ARROW }
 | '+'                 { PLUS }
 | '-'                 { MINUS }
 | '*'                 { TIMES }
 | '/'                 { DIVIDE }
-| "=="                 { EQ }
+| "=="                { EQ }
 | "!="                { NEQ }
 | "<="                { LE }
 | ">="                { GE }
@@ -49,6 +51,8 @@ rule token = parse
 | "var"               { VAR }
 | "padto"             { PADTO }
 | "channel"           { CHANNEL }
+| "publength"         { PUBLEN }
+| "seclength"         { SECLEN }
 | "size"              { SIZE }
 | "oblif"             { OBLIF }
 | "if"                { IF }

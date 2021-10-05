@@ -35,8 +35,8 @@ let semant prog =
   then res
   else raise CompileError
 
-let interp _ = ()
-  (*Interpreter.Interp.interp prog*)
+let interp prog =
+  Interpreter.Interp.interp prog
   
 let client file =
   let exitCode = ref 0 in
@@ -59,7 +59,7 @@ let src_arg =
 
 let check file =
   if Filename.extension file |> String.equal ".json"
-  then ()(*Interpreter.Server.start file*)
+  then Interpreter.Server.start file
   else client file
 
 let main_t =

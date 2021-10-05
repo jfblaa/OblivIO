@@ -1,0 +1,18 @@
+TESTER
+
+var a : (int * string)@{H} = (42,"Hello");
+
+START(reply: (int * string)[]@{H} -> (), x: int@{H}) {
+    // Decls
+    var b : (int * string)@{H} = (84,"World");
+    var arr : (int * string)[]@{H} = [a,b,(123,"Goodbye")];
+
+    ;; // Prelude
+
+    a = (0,"");
+
+    ;; // Body
+
+    arr[5] = a;
+    send(reply,arr);
+}

@@ -68,7 +68,7 @@ let start json_file =
         print_endline @@ sender ^ " connected...";
         H.add routing_table sender out_channel;
         let open Common.Value in
-        let msg = M.Relay{sender="";receiver="";channel="START";level=Common.Level.bottom;bit=1;value=IntVal 0} in
+        let msg = M.Relay{sender="";replyto=None;receiver="";channel="START";level=Common.Level.bottom;bit=1;value=IntVal 0} in
         output_value out_channel msg;
         flush out_channel;
       | M.Relay {receiver;_} as msg ->

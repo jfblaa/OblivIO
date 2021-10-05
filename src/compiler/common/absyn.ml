@@ -1,18 +1,19 @@
 type pos = Lexing.position 
 type level = Level.level
-type ty = Types.ty
-type basetype = Types.basetype
+type channel = Channel.channel
+
+module T = Types
 
 include Oper
 
 type program = Prog of { node: string; decls: decl list; chs: ch list }
 and decl
-  = VarDecl of { ty: ty; x: string; init: exp; pos: pos }
-  | ChannelDecl of { ty: ty; node: string; ch: string; pos: pos }
-  | InputDecl of { ty: ty; pos: pos }
-and hldecl = LocalDecl of { ty: ty; x: string; init: exp; pos: pos }
+  = VarDecl of { ty: T.ty; x: string; init: exp; pos: pos }
+  | ChannelDecl of { chty: T.chty; node: string; ch: string; pos: pos }
+  | InputDecl of { ty: T.ty; pos: pos }
+and hldecl = LocalDecl of { ty: T.ty; x: string; init: exp; pos: pos }
 and ch
-  = Ch of { ty: ty; ch: string; x: string; y: string; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
+  = Ch of { ch: string; x: string; ty: T.ty; replych: (string * T.chty) option; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; pos: pos}
 and var_base
   = SimpleVar of string
@@ -26,6 +27,7 @@ and exp_base
   | StringExp of string
   | VarExp of var
   | ProjExp of {proj: proj; exp:exp}
+  | LengthExp of {public: bool; var: var}
   | SizeExp of exp
   | OpExp of { left: exp; oper: oper; right: exp }
   | PairExp of (exp*exp)
@@ -37,7 +39,7 @@ and cmd_base
   | AssignCmd of { var: var; exp: exp }
   | BindCmd of { var: var; exp: exp }
   | InputCmd of { var: var; size: exp }
-  | SendCmd of { node: string; channel: string; exp: exp }
+  | SendCmd of { channel: channel; replyto: string option; exp: exp }
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }

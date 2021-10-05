@@ -9,6 +9,7 @@ type basetype =
   | ERROR
 
 type ty = Type of {base: basetype; level: L.level}
+type chty = ChType of {reads: ty; writes: ty option}
 
 let base (Type{base;_}) = base
 let level (Type{level;_}) = level
@@ -31,3 +32,5 @@ let rec base_to_string = function
 let to_string (Type{base;level}) =
   String.concat ""
     [base_to_string base; "@"; L.to_string level]
+  
+  

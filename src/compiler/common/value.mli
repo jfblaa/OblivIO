@@ -1,9 +1,9 @@
 
 type value =
   | IntVal of int
-  | StringVal of char array
+  | StringVal of {length: int; data: char array}
   | PairVal of value * value
-  | ArrayVal of value array
+  | ArrayVal of {length: int; data: value array}
 
 val size: value -> int
 

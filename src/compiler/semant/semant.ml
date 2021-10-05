@@ -6,6 +6,7 @@ module A = Absyn
 module Err = Errorenv
 module Ty = Types
 module L = Level
+module C = Channel
 
 module H = Hashtbl
 
@@ -15,7 +16,8 @@ type context
   = { gamma : (string, Ty.ty) H.t
     ; delta : (string, Ty.ty) H.t
     ; mutable input: Ty.ty option
-    ; lambda : (string * string, Ty.ty) H.t
+    ; lambda : (C.channel, Ty.chty) H.t
+    ; hltable : (string, Ty.ty) H.t
     ; err :  Err.errorenv 
     }
 ;;
@@ -27,7 +29,12 @@ let errTy err pos msg =
   Err.error err pos @@ msg;
   _bot Ty.ERROR
 
-type varloc = LOCAL | STORE
+let errChTy err pos msg =
+  Err.error err pos @@ msg;
+  let reads = _bot Ty.ERROR in
+  let writes = None in
+  T.ChType{reads;writes}
+
 let lookupVar ({gamma;delta;err;_}) v pos = 
   match H.find_opt delta v with
   | Some ty -> LOCAL,ty
@@ -41,26 +48,23 @@ let lookupInternal ({input;err;_}) pos =
     | Some ty -> ty
     | None -> errTy err pos @@ "undeclared internal channel"
 
-let lookupRemote ({lambda;err;_}) node ch pos = 
-  match H.find_opt lambda (node,ch) with
+let lookupHandler ({hltable;err;_}) hl pos = 
+  match H.find_opt hltable hl with
   | Some ty -> ty
-  | None -> errTy err pos @@ "undeclared remote channel " ^ ch ^ " at node " ^ node
+  | None -> errTy err pos @@ "undeclared handler " ^ hl
+
+let lookupRemote ({lambda;err;_}) channel pos = 
+  match H.find_opt lambda channel with
+  | Some ty -> ty
+  | None -> errChTy err pos @@ "undeclared channel " ^ C.to_string channel
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
-let v_ty = function
-  | (LocalVar{ty;_} as v) -> (v,ty)
-  | (StoreVar{ty;_} as v) -> (v,ty)
-let v_ty_loc = function
-  | (LocalVar{ty;_} as v) -> (v,ty,LOCAL)
-  | (StoreVar{ty;_} as v) -> (v,ty,STORE)
-let v_ty_lvl = function
-  | (LocalVar{ty;_} as v) -> (v,ty,T.level ty)
-  | (StoreVar{ty;_} as v) -> (v,ty,T.level ty)
+let v_ty (Var{ty;_} as v) = (v,ty)
+let v_ty_loc (Var{ty;loc;_} as v) = (v,ty,loc)
+let v_ty_lvl (Var{ty;_} as v) = (v,ty,T.level ty)
 
-let v_ty_lvl_loc = function
-  | (LocalVar{ty;_} as v) -> (v,ty,T.level ty,LOCAL)
-  | (StoreVar{ty;_} as v) -> (v,ty,T.level ty,STORE)
+let v_ty_lvl_loc (Var{ty;loc;_} as v) = (v,ty,T.level ty,loc)
 
 let isSameBase t1 t2 =
   match Ty.base t1, Ty.base t2 with
@@ -152,6 +156,11 @@ let rec transExp ({err;_} as ctxt) =
         | Fst, _ -> Fst, errTy err pos @@ "not a pair type " ^ T.to_string ty
         | Snd, _ -> Snd, errTy err pos @@ "not a pair type " ^ T.to_string ty in
       ProjExp{proj;exp} ^! ty
+    | LengthExp{public;var} ->
+      let var,_,level = v_ty_lvl @@ transVar ctxt var in
+      if public
+      then LengthExp{public;var} ^! T.Type{base=T.INT;level=L.bottom}
+      else LengthExp{public;var} ^! T.Type{base=T.INT;level}
     | PairExp (a,b) ->
       let (a,aty,alvl) = e_ty_lvl @@ trexp a in
       let (b,bty,blvl) = e_ty_lvl @@ trexp b in
@@ -176,8 +185,8 @@ let rec transExp ({err;_} as ctxt) =
   in trexp
 and transVar ({err;_} as ctxt) =
   let rec trvar (A.Var{var_base;pos}) =
-    let (^!) var_base ty = LocalVar{var_base;ty;pos} in
-    let (^@) var_base ty = StoreVar{var_base;ty;pos} in
+    let (^!) var_base ty = Var{var_base;loc=LOCAL;ty;pos} in
+    let (^@) var_base ty = Var{var_base;loc=STORE;ty;pos} in
     match var_base with
     | SimpleVar x ->
       let varloc, ty = lookupVar ctxt x pos in
@@ -237,12 +246,24 @@ let transCmd ({err;_} as ctxt) =
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
       fromBase @@ InputCmd{var;size}
-    | SendCmd {node;channel;exp} ->
-      let chty = lookupRemote ctxt node channel pos in
+    | SendCmd {channel;replyto;exp} ->
+      let T.ChType{reads;writes} = lookupRemote ctxt channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkBaseType ety chty err pos;
-      checkFlowTypePC pc ety chty err pos;
-      fromBase @@ SendCmd{node;channel;exp=e}
+      checkBaseType ety reads err pos;
+      checkFlowTypePC pc ety reads err pos;
+      begin 
+        match writes,replyto with
+        | Some wty,Some hl ->
+          let hlty = lookupHandler ctxt hl pos in
+          checkBaseType wty hlty err pos;
+          checkFlowType wty hlty err pos
+        | None, None -> ()
+        | Some wty, None ->
+          Err.error err pos @@ "unhandled reply of type " ^ T.to_string wty ^ " from channel " ^ C.to_string channel
+        | None, Some _ ->
+          Err.error err pos @@ "channel " ^ (C.to_string channel) ^ " does not reply"
+      end;
+      fromBase @@ SendCmd{channel;replyto;exp=e}
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
@@ -284,9 +305,9 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     checkBaseType initty ty err pos;
     checkFlowType initty ty err pos;
     VarDecl{x;ty;init;pos}
-  | A.ChannelDecl {ty;node;ch;pos} ->
-    H.add lambda (node,ch) ty;
-    ChannelDecl{node;ch;ty;pos}
+  | A.ChannelDecl {chty;node;ch;pos} ->
+    H.add lambda (Explicit (node,ch)) chty;
+    ChannelDecl{node;ch;chty;pos}
   | A.InputDecl{ty;pos} ->
     begin
     match input with
@@ -296,15 +317,26 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     checkString ty err pos;
     InputDecl{ty;pos}
 
-let transCh ({delta;_} as ctxt) (A.Ch{ty;ch;x;y;decls;prelude;body;pos}) =
+let transCh ({delta;lambda;_} as ctxt) (A.Ch{ch;x;ty;replych;decls;prelude;body;pos}) =
   H.add delta x ty;
-  let sizety = T.Type{base=T.INT;level=L.bottom} in
-  H.add delta y sizety;
+  begin 
+    match replych with
+    | Some (ch,chty) -> H.add lambda (Implicit ch) chty
+    | None -> ()
+  end;
   let decls = List.map (transLocal ctxt) decls in
   let prelude = Option.map (transCmd ctxt L.bottom) prelude in
   let body = transCmd ctxt (T.level ty) body in
   H.clear delta;
-  Ch{ty;ch;x;y;decls;prelude;body;pos}
+  begin 
+    match replych with
+    | Some (ch,_) -> H.remove lambda (Implicit ch);
+    | None -> ()
+  end;
+  Ch{ch;x;ty;replych;decls;prelude;body;pos}
+
+let transHlDecl {hltable;_} (A.Ch{ch;ty;_}) =
+  H.add hltable ch ty
 
 let transProg (A.Prog{node;decls;chs}) =
   let ctxt = 
@@ -312,8 +344,10 @@ let transProg (A.Prog{node;decls;chs}) =
     ; delta = H.create 1024
     ; input = None
     ; lambda = H.create 1024
+    ; hltable = H.create 1024
     ; err = Err.initial_env
     } in
   let decls = List.map (transDecl ctxt) decls in
+  List.iter (transHlDecl ctxt) chs;
   let chs = List.map (transCh ctxt) chs in
   not (Err.any_errors ctxt.err), Prog{node;decls;chs}

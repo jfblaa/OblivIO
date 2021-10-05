@@ -1,0 +1,12 @@
+TEST
+
+START(x : int@{}) {
+    var i : int@{H} = 3;
+    var arr : int[][]@{H} = [[0],[1],[2],[3,3,3,3,3,3,3,3],[4]];
+    
+    ;;
+
+    print("Array",arr);
+    arr[i] = [42,84,123];
+    print("Array",arr);
+}

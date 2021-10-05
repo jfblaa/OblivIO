@@ -1,6 +1,6 @@
 (executable
         (name oblivio)
-        (libraries stdio cmdliner common lexer parser semant)
+        (libraries stdio cmdliner common lexer parser semant interpreter)
         )
 
 

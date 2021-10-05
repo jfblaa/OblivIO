@@ -1,0 +1,21 @@
+ALICE
+
+channel BANK/TRANSFER : (int*(int*int))@{H} -> (int*int)@{H};
+
+var my_id : int@{H} = 1; // Alice
+var amount : int@{H} = 200;
+var to_id : int@{H} = 3; // Bob
+
+START(x : int@{}) {
+    var msg : (int*(int*int))@{H} = (my_id,(amount,to_id));
+
+    ;;
+
+    send(BANK/TRANSFER,INSUFFICIENT_FUNDS,msg);
+}
+
+INSUFFICIENT_FUNDS(status : (int*int)@{H}) {
+    print("Payment failed!");
+    print("Tried to send", fst status);
+    print("Current balance", snd status);
+}

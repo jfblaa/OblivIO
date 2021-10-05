@@ -3,13 +3,15 @@ module M = Common.Message
 module L = Common.Level
 module A = Common.Tabsyn
 module V = Common.Value
+module Ty = Common.Types
+module C = Common.Channel
 
 module H = Hashtbl
 
 open Common.Value
 open Common.Oper
 
-type handler_info = {x: string; y: string; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
+type handler_info = {x: string; replych: (string*Ty.chty) option; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
 type sync_queue =
@@ -22,9 +24,11 @@ type context =
   ; message_queue: sync_queue
   ; mutable input_buffer: char array
   ; mutable mode: int list
-  ; mem: (string, value) H.t
+  ; mutable replyto: (string*string) option
+  ; memory: (string, value) H.t
+  ; store: (string, value) H.t
   ; handlers: (string, handler_info) H.t
-  ; trust_map: (string * string, L.level) H.t
+  ; trust_map: (C.channel, L.level) H.t
   ; server: server_info
   }
 
@@ -58,6 +62,10 @@ let safeDiv a b =
   let b' = b*(b0 lxor 1) lor b0 in
   ((a / b')*(b0 lxor 1)) lor (b0*max_int)
 
+let _int = function
+  | IntVal n -> n
+  | _ -> raise @@ InterpFatal "_I"
+
 let safeConcat (arr1 : char array) (arr2 : char array) =
   let l1 = Array.length arr1 in
   let l2 = Array.length arr2 in
@@ -78,56 +86,101 @@ let safeConcat (arr1 : char array) (arr2 : char array) =
     c := 0
   done;
   res
-  
-
-let safeBind (bit : int) (orig : char array) (upd : char array) =
-  let len, padded_orig, padded_upd =
-    match Array.length orig, Array.length upd with
-      | l1, l2 when l1 < l2 ->
-        l2,
-        Array.append orig @@ Array.make (l2-l1) '\000',
-        upd
-      | l1, l2 when l1 > l2 ->
-        l1,
-        orig,
-        Array.append upd @@ Array.make (l1-l2) '\000'
-      | l1, _ ->
-        l1, orig, upd in
-  let res = Array.make len '\000' in
-  for i = 0 to len-1 do
-    let i1 = (1 lxor bit) * (Char.code @@ padded_orig.(i)) in
-    let i2 = bit * (Char.code @@ padded_upd.(i)) in
-    res.(i) <- Char.chr @@ i1 lor i2
-  done;
-  res
  
-let safeEq (arr1 : char array) (arr2 : char array) =
-  let mismatch = ref 0 in
-  let len, chk_opt =
-    match Array.length arr1, Array.length arr2 with
-    | l1, l2 when l1 < l2 -> l1, Some arr2
-    | l1, l2 when l1 > l2 -> l2, Some arr1
-    | l1, _ -> l1, None in
-  for i = 0 to len-1 do
-    let i1 = Char.code @@ arr1.(i) in
-    let i2 = Char.code @@ arr2.(i) in
-    mismatch := (i1 lxor i2) lor !mismatch
-  done;
-  (match chk_opt with
-  | Some arr ->
-    let i1 = Char.code @@ arr.(len) in
-    let i2 = Char.code '\000' in
-    mismatch := (i1 lxor i2) lor !mismatch
-  | _ -> ());
-  Bool.to_int (!mismatch = 0)
+let safeEq v1 v2 =
+  match v1, v2 with
+  | IntVal a, IntVal b -> 
+    Bool.to_int @@ (a lxor b = 0)
+  | StringVal{length=l1;data=d1}, StringVal{length=l2;data=d2} ->
+    let mismatch = ref (l1 lxor l2) in
+    let len = min (Array.length d1) (Array.length d2) in
+    for i = 0 to len-1 do
+      let i1 = Char.code @@ d1.(i) in
+      let i2 = Char.code @@ d2.(i) in
+      mismatch := (i1 lxor i2) lor !mismatch
+    done;
+    Bool.to_int (!mismatch = 0)
+  | _ -> raise @@ NotImplemented "safeEq"
+
+let rec safeSelect (bit: int) (orig: value) (upd: value) =
+  let rec _S orig upd =
+    match orig, upd with
+    | IntVal a, IntVal b ->
+      IntVal (((bit lxor 1) * a) lor (bit * b))
+    | StringVal{length=l1;data=d1}, StringVal{length=l2;data=d2} ->
+      begin
+      match Array.length d1, Array.length d2 with
+      | arrlen1, arrlen2 when arrlen1 < arrlen2 ->
+        let length = ((1 lxor bit)*l1) lor (bit*l2) in
+        let data = Array.copy d2 in
+        for i = 0 to arrlen1-1 do
+          let i1 = (1 lxor bit) * (Char.code @@ d1.(i)) in
+          let i2 = bit * (Char.code @@ d2.(i)) in
+          data.(i) <- Char.chr @@ i1 lor i2
+        done;
+        StringVal{length;data}
+      | _, arrlen2 ->
+        let length = ((1 lxor bit)*l1) lor (bit*l2) in
+        let data = Array.copy d1 in
+        for i = 0 to arrlen2-1 do
+          let i1 = (1 lxor bit) * (Char.code @@ d1.(i)) in
+          let i2 = bit * (Char.code @@ d2.(i)) in
+          data.(i) <- Char.chr @@ i1 lor i2
+        done;
+        StringVal{length;data}
+      end
+    | PairVal (a1,a2), PairVal (b1,b2) ->
+      PairVal (_S a1 b1, _S a2 b2)
+    | ArrayVal{length=l1;data=d1}, ArrayVal{length=l2;data=d2} ->
+      begin
+        match Array.length d1, Array.length d2 with
+        | arrlen1, arrlen2 when arrlen1 <= arrlen2 ->
+          let length = ((1 lxor bit)*l1) lor (bit*l2) in
+          let data = Array.copy d2 in
+          for i = 0 to arrlen1-1 do
+            data.(i) <- _S d1.(i) d2.(i)
+          done;
+          ArrayVal{length;data}
+        | _, arrlen2 ->
+          let length = ((1 lxor bit)*l1) lor (bit*l2) in
+          let data = Array.copy d1 in
+          for i = 0 to arrlen2-1 do
+            data.(i) <- safeSelect bit d1.(i) d2.(i)
+          done;
+          ArrayVal{length;data}
+      end
+    | _ -> raise @@ InterpFatal "safeBind" in
+  _S orig upd
+
+  let safeStringBind (bit : int) (orig : char array) (upd : char array) =
+    let len, padded_orig, padded_upd =
+      match Array.length orig, Array.length upd with
+        | l1, l2 when l1 < l2 ->
+          l2,
+          Array.append orig @@ Array.make (l2-l1) '\000',
+          upd
+        | l1, l2 when l1 > l2 ->
+          l1,
+          orig,
+          Array.append upd @@ Array.make (l1-l2) '\000'
+        | l1, _ ->
+          l1, orig, upd in
+    let res = Array.make len '\000' in
+    for i = 0 to len-1 do
+      let i1 = (1 lxor bit) * (Char.code @@ padded_orig.(i)) in
+      let i2 = bit * (Char.code @@ padded_upd.(i)) in
+      res.(i) <- Char.chr @@ i1 lor i2
+    done;
+    res
 
 let op oper v1 v2 =
   match oper,v1,v2 with
+  (* POLY *)
+  | EqOp, _, _ ->
+    IntVal (safeEq v1 v2)
+  | NeqOp, _, _ ->
+    IntVal ((safeEq v1 v2) lxor 1)
   (* INT *)
-  | EqOp, IntVal a, IntVal b ->
-    IntVal (Bool.to_int @@ (a lxor b = 0))
-  | NeqOp, IntVal a, IntVal b ->
-    IntVal (Bool.to_int @@ (a lxor b <> 0))
   | LtOp, IntVal a, IntVal b ->
     IntVal (Bool.to_int @@ (a - b < 0))
   | LeOp, IntVal a, IntVal b ->
@@ -153,25 +206,150 @@ let op oper v1 v2 =
   | DivideOp, IntVal a, IntVal b ->
     IntVal (safeDiv a b)
   (* STRING *)
-  | EqOp, StringVal a, StringVal b ->
-    IntVal (safeEq a b)
-  | NeqOp, StringVal a, StringVal b ->
-    IntVal ((safeEq a b) lxor 1)
-  | CaretOp, StringVal a, StringVal b ->
-    StringVal (safeConcat a b)
-  | PadOp, StringVal s, IntVal n ->
-    let upd = Array.make n '\000' in
-    StringVal (safeBind 0 s upd)
+  | CaretOp, StringVal {length=l1;data=d1}, StringVal {length=l2;data=d2} ->
+    StringVal {length=l1+l2; data=safeConcat d1 d2}
+  | PadOp, s, IntVal length ->
+    let data = Array.make length '\000' in
+    safeSelect 0 s (StringVal{length;data})
   | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
 
-let eval {mem;_} =
+type update = ASSIGN | BIND
+let rec readvar ctxt =
+  let rec _V path (A.Var{var_base;loc;_}) = match var_base with
+    | A.SimpleVar x ->
+      let v = 
+        match loc with
+        | LOCAL -> lookup ctxt.memory x
+        | STORE -> lookup ctxt.store x in
+      let rec f path v =
+        match path, v with
+        | [], _ -> v
+        | (i,lvl)::tl, ArrayVal{length;data} ->
+          let maxidx = length -1 in
+          let cnd1 = Bool.to_int(i >= 0) in
+          let cnd2 = Bool.to_int(i > maxidx) in
+          let idx = cnd1 * i in
+          let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
+          let res =
+            if L.flows_to lvl L.bottom
+            then f tl data.(idx) (* public index, no problem! *)
+            else 
+              (* non-public index, must obliv everything! *)
+              let len = Array.length data - 1 in
+              let res = f tl data.(0) in
+              let a = ref res in
+              for i = 0 to len do
+                let b = f tl data.(i) in
+                a := safeSelect (Bool.to_int (i lxor idx = 0)) !a b
+              done;
+              !a in 
+          res
+        | _ -> raise @@ InterpFatal "readVar"
+        in
+      f path v
+    | A.SubscriptVar {var;exp} ->
+      let A.Exp{ty;_} = exp in
+      let i = _int @@ eval ctxt exp in
+      let lvl = Ty.level ty in
+      _V ((i,lvl)::path) var
+in _V []
+
+and writevar ctxt updkind upd mode =
+  let rec _V path (A.Var{var_base;loc;_}) = match var_base with
+    | A.SimpleVar x ->
+      let table =
+        match loc with
+        | LOCAL -> ctxt.memory
+        | STORE -> ctxt.store in
+      let v = lookup table x in
+      let rec f path v mode =
+        match path, v with
+        | [], _ ->
+          begin 
+          match updkind with
+          | ASSIGN -> H.add table x upd
+          | BIND ->
+            let orig = lookup table x in
+            H.add table x @@ safeSelect mode orig upd
+          end
+        | [(i,lvl)], ArrayVal{length;data} ->
+          let maxidx = length -1 in
+          let cnd1 = Bool.to_int(i >= 0) in
+          let cnd2 = Bool.to_int(i > maxidx) in
+          let idx = cnd1 * i in
+          let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
+          if L.flows_to lvl L.bottom
+          then (* public index, no problem! *)
+            match updkind with
+            | ASSIGN -> data.(idx) <- upd
+            | BIND ->
+              let orig = lookup table x in
+              data.(idx) <- safeSelect mode orig upd
+          else 
+            (* non-public index, must obliv everything! *)
+            let len = Array.length data - 1 in
+            for i = 0 to len do
+              let right_index = Bool.to_int (i lxor idx = 0) in
+              data.(i) <- safeSelect (right_index land mode) data.(i) upd
+            done          
+        | (i,lvl)::tl, ArrayVal{length;data} ->
+          let maxidx = length -1 in
+          let cnd1 = Bool.to_int(i >= 0) in
+          let cnd2 = Bool.to_int(i > maxidx) in
+          let idx = cnd1 * i in
+          let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
+          (* TODO:
+           - if idx is secret, then we must bind at every index
+           - if idx is public, but pc is secret (BindCmd), then we must bind at idx
+           - if idx and pc are both public, then we can do straight assign
+           How to:
+           - read first index as res 
+           - at every index, safe bind into res *)
+          
+          if L.flows_to lvl L.bottom
+          then f tl data.(idx) mode (* public index, no problem! *)
+          else 
+            (* non-public index, must obliv everything! *)
+            let len = Array.length data - 1 in
+            for i = 0 to len do
+              let right_index = Bool.to_int (i lxor idx = 0) in
+              f tl data.(i) (right_index land mode)
+            done          
+        | _ -> raise @@ InterpFatal "writeVar"
+        in
+      f path v mode
+    | A.SubscriptVar {var;exp} ->
+      let A.Exp{ty;_} = exp in
+      let i = _int @@ eval ctxt exp in
+      let lvl = Ty.level ty in
+      _V ((i,lvl)::path) var
+in _V []
+
+and eval ctxt =
   let rec _E (A.Exp{exp_base;_}) =
     match exp_base with
     | A.IntExp i -> IntVal i
     | A.StringExp s -> 
-      let arr = Array.of_seq @@ String.to_seq s in
-      StringVal arr
-    | A.VarExp (x,_) -> lookup mem x
+      let length = String.length s in
+      let data = s |> String.to_seq |> Array.of_seq in
+      StringVal {length;data}
+    | A.VarExp v -> 
+      readvar ctxt v
+    | A.ProjExp {proj;exp} ->
+      let v = _E exp in
+      begin
+        match proj,v with
+        | A.Fst, PairVal (a,_) -> a
+        | A.Snd, PairVal (_,b) -> b
+        | _ -> raise @@ InterpFatal __LOC__
+      end
+    | A.LengthExp{public;var} ->
+      begin
+        match readvar ctxt var with
+        | ArrayVal{length;data} ->
+          if public then IntVal (Array.length data) else IntVal length
+        | _ -> raise @@ InterpFatal "LengthExp"
+      end
     | A.SizeExp exp ->
       let v = _E exp in
       IntVal (size v)
@@ -180,6 +358,14 @@ let eval {mem;_} =
       let v2 = _E right in
       let v = op oper v1 v2 in
       v
+    | A.PairExp (a,b) ->
+      PairVal (_E a,_E b)
+    | ArrayExp arr ->
+      let length = List.length arr in
+      let data =
+        arr |> List.map _E
+            |> Array.of_list  in
+      ArrayVal {length;data}
   in _E
 
 let interpCmd ctxt =
@@ -193,55 +379,51 @@ let interpCmd ctxt =
     | SeqCmd {c1;c2} ->
       _I c1;
       _I c2
-    | AssignCmd { var=(x,_); exp } when getMode () = 1 ->
+    | AssignCmd { var; exp } ->
+      let Var{loc;_} = var in
+      begin 
+        match loc, getMode () with
+        | STORE, 0 -> ()
+        | _ ->
+          let v = eval ctxt exp in
+          writevar ctxt ASSIGN v 1 var
+      end
+    | BindCmd { var; exp } ->
       let v = eval ctxt exp in
-      H.add ctxt.mem x v
-    | AssignCmd _ ->
-      ()
-    | BindCmd { var=(x,_); exp } ->
-      let orig = lookup ctxt.mem x in
-      let upd = eval ctxt exp in
-      let mode = getMode () in
-      let v =
-        match orig,upd with
-        | IntVal i1, IntVal i2 ->
-          let i = ((mode lxor 1) * i1) lor (mode * i2) in
-          IntVal i
-        | StringVal s1, StringVal s2 ->
-          let s = safeBind mode s1 s2 in
-          StringVal s
-        | _ -> raise @@ InterpFatal ("type mismatch during bind") in
-      H.add ctxt.mem x v
-    | InputCmd { var=(x,_); size; _ } ->
-      let vx = lookup ctxt.mem x in
-      let ne = eval ctxt size in
-      let len,res_len, arr =
-        match vx,ne with
-        | StringVal s, IntVal n -> 
-          let len = max (Array.length s) n in
-          let max_len = Array.length ctxt.input_buffer in
-          len,min len max_len, s
-        | _ -> raise @@ InterpFatal __LOC__ in
-
-      let upd = Array.sub ctxt.input_buffer 0 res_len in
-      let updbit = Bool.to_int @@ (upd.(0) <> '\000') in
+      writevar ctxt BIND v (getMode ()) var
+    | InputCmd { var; size; _ } ->
+      let ne = _int @@ eval ctxt size in
+      let max_len = Array.length ctxt.input_buffer in
+      let len = min ne max_len in
+      let data = Array.sub ctxt.input_buffer 0 len in
+      let updbit = Bool.to_int @@ (data.(0) <> '\000') in
       let shouldBind = getMode () land updbit in
-      let res = safeBind shouldBind arr upd in
-      
-      let blank = Array.make res_len '\000' in
+      let str = StringVal{length=Array.length data;data} in
+      writevar ctxt BIND str shouldBind var;
+
+      let blank = Array.make len '\000' in
       let buf_upd =
         Array.append
-          (Array.sub ctxt.input_buffer res_len (len - res_len))
+          (Array.sub ctxt.input_buffer len (max_len - len))
           blank in
+      let s1 = StringVal{length=max_len;data=ctxt.input_buffer} in
+      let s2 = StringVal{length=max_len;data=buf_upd} in
+      begin
+        match safeSelect shouldBind s1 s2 with
+        | StringVal{data;_} ->
+          ctxt.input_buffer <- data
+        | _ -> raise @@ InterpFatal "InputCmd"
+      end
       
-      ctxt.input_buffer <- safeBind shouldBind ctxt.input_buffer buf_upd;
-
-      H.add ctxt.mem x (StringVal res)
-    | SendCmd { node; channel; exp } ->
-      let level = lookup ctxt.trust_map (node,channel) in
+    | SendCmd { channel; replyto; exp } ->
+      let level = lookup ctxt.trust_map channel in
       let value = eval ctxt exp in
       let bit = getMode () in
-      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;bit;value} in
+      let receiver, channel =
+        match channel with
+        | Explicit (node,ch) -> node, ch
+        | Implicit _ -> Option.get ctxt.replyto in
+      let msg = M.Relay{sender=ctxt.name;replyto;receiver;channel;level;bit;value} in
       output_value ctxt.server.output msg;
       flush ctxt.server.output
     | IfCmd { test; thn; els } ->
@@ -290,12 +472,19 @@ let interpCmd ctxt =
 let rec loop ctxt =
   begin
   match input_value ctxt.server.input with
-  | M.Relay{channel;bit;value;_} ->
+  | M.Relay{sender;replyto;channel;bit;value;_} ->
     begin
       match H.find_opt ctxt.handlers channel with
-      | Some {x;y;decls;prelude;body} ->
-        H.add ctxt.mem x value;
-        H.add ctxt.mem y (V.IntVal (V.size value));
+      | Some {x;replych;decls;prelude;body} ->
+        H.add ctxt.memory x value;
+        ctxt.replyto <- Option.bind replyto (fun ch -> Some (sender,ch));
+        Option.iter
+          (fun (ch,Ty.ChType{reads;_}) ->
+            let lvl = Ty.level reads in
+            H.add ctxt.trust_map (Implicit ch) lvl) replych;
+        let f (A.LocalDecl{x;init;_}) =
+          H.add ctxt.memory x @@ eval ctxt init in
+        List.iter f decls;
         begin match prelude with
         | Some prelude ->
           ctxt.mode <- [1;bit];
@@ -304,7 +493,12 @@ let rec loop ctxt =
         | None ->
           ctxt.mode <- [bit]
         end;
-        interpCmd ctxt body
+        interpCmd ctxt body;
+        H.clear ctxt.memory;
+        ctxt.replyto <- None;
+        Option.iter
+          (fun (ch,_) ->
+            H.remove ctxt.trust_map (Implicit ch)) replych;
       | None -> ()
     end
   | _ -> ()
@@ -333,22 +527,24 @@ let interp (A.Prog{node;decls;chs}) =
       }
     ; input_buffer = Array.make 256 '\000'
     ; mode = []
-    ; mem = H.create 1024
+    ; replyto = None
+    ; memory = H.create 1024
+    ; store = H.create 1024
     ; handlers = H.create 1024
     ; trust_map = H.create 1024
     ; server = {input;output}
     } in
-  let f (A.Ch{ch;x=(x,_);y=(y,_);decls;prelude;body;_}) =
-    H.add ctxt.handlers ch {x;y;decls;prelude;body} in
+  let f (A.Ch{ch;x;replych;decls;prelude;body;_}) =
+    H.add ctxt.handlers ch {x;replych;decls;prelude;body} in
   let g = function
-    | (A.VarDecl{var=(var,_);init;_}) ->
+    | (A.VarDecl{x;init;_}) ->
       let i = eval ctxt init in
-      H.add ctxt.mem var i
+      H.add ctxt.store x i
     | (A.InputDecl _) ->
       ()
-    | (A.ChannelDecl{node;ch;ty;_}) ->
-      let lvl = Common.Types.level ty in
-      H.add ctxt.trust_map (node,ch) lvl in
+    | (A.ChannelDecl{node;ch;chty=Ty.ChType{reads;_};_}) ->
+      let lvl = Ty.level reads in
+      H.add ctxt.trust_map (Explicit (node,ch)) lvl in
   
   List.iter f chs;
   List.iter g decls;

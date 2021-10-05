@@ -1,0 +1,21 @@
+BANK
+
+var balance : int[]@{H} = [123,745,433,42,909];
+
+TRANSFER(sender : (int*int)@{H} -> (), msg : (int*(int*int))@{H}) {
+    var from : int@{H} = fst msg;
+    var amount : int@{H} = fst snd msg;
+    var to : int@{H} = snd snd msg;
+
+    ;;
+
+    print("Balances", balance);
+    oblif amount <= balance[from]
+    then {
+        balance[from] ?= balance[from] - amount;
+        balance[to] ?= balance[to] + amount;
+    } else {
+        send(sender,(amount,balance[from]));
+    }
+    print("Balances", balance);
+}
