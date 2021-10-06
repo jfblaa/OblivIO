@@ -1,0 +1,21 @@
+TEST
+
+START(x : int@{}) {
+    var i : int@{H} = 1;
+    var arr1 : (int*string)[]@{H} = [(1,"Hello"),(2,"World")];
+    var arr2 : (int*string)[]@{H} = arr1;
+    
+    ;;
+
+    print("arr1",arr1);
+    print("arr2",arr2);
+    print("Eq", arr1 == arr2);
+
+    oblif 1
+    then arr2 ?= [(9,"A"),(8,"B"),(7,"c")];
+    else skip;
+
+    print("arr1",arr1);
+    print("arr2",arr2);
+    print("Eq", arr1 == arr2);
+}

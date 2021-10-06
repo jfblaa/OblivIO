@@ -91,10 +91,16 @@ let checkFlowTypePC pc t1 t2 err pos =
     then Err.error err pos @@ "illegal flow from " ^ L.to_string l1 ^ " to " ^ L.to_string l2 ^ " at pc " ^ L.to_string pc
 
 let checkComparable t1 t2 err pos =
-  match Ty.base t1, Ty.base t2 with
-  | Ty.INT, Ty.INT -> ()
-  | Ty.STRING, Ty.STRING -> ()
-  | b1, b2 -> Err.error err pos @@ "types " ^ Ty.base_to_string b1 ^ " and " ^ Ty.base_to_string b2 ^ " do not match"
+  let rec _check b1 b2 =
+    match b1, b2 with
+    | Ty.INT, Ty.INT -> ()
+    | Ty.STRING, Ty.STRING -> ()
+    | Ty.PAIR (a1,a2), Ty.PAIR (b1,b2) ->
+      _check a1 b1; _check a2 b2
+    | Ty.ARRAY t1, Ty.ARRAY t2 ->
+      _check t1 t2
+    | b1, b2 -> Err.error err pos @@ "types " ^ Ty.base_to_string b1 ^ " and " ^ Ty.base_to_string b2 ^ " do not match"
+  in _check (T.base t1) (T.base t2)
 
 let checkLowPC pc err pos =
   if not (L.flows_to pc L.bottom)
@@ -157,10 +163,15 @@ let rec transExp ({err;_} as ctxt) =
         | Snd, _ -> Snd, errTy err pos @@ "not a pair type " ^ T.to_string ty in
       ProjExp{proj;exp} ^! ty
     | LengthExp{public;var} ->
-      let var,_,level = v_ty_lvl @@ transVar ctxt var in
-      if public
-      then LengthExp{public;var} ^! T.Type{base=T.INT;level=L.bottom}
-      else LengthExp{public;var} ^! T.Type{base=T.INT;level}
+      let var,ty,level = v_ty_lvl @@ transVar ctxt var in
+      begin
+      match T.base ty with
+      | T.STRING | T.ARRAY _ ->
+        if public
+        then LengthExp{public;var} ^! T.Type{base=T.INT;level=L.bottom}
+        else LengthExp{public;var} ^! T.Type{base=T.INT;level}
+      | _ -> LengthExp{public;var} ^! errTy err pos @@ "not a string or array type " ^ T.to_string ty
+      end
     | PairExp (a,b) ->
       let (a,aty,alvl) = e_ty_lvl @@ trexp a in
       let (b,bty,blvl) = e_ty_lvl @@ trexp b in

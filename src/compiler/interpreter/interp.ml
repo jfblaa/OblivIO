@@ -87,17 +87,31 @@ let safeConcat (arr1 : char array) (arr2 : char array) =
   done;
   res
  
-let safeEq v1 v2 =
+let rec safeEq v1 v2 =
   match v1, v2 with
   | IntVal a, IntVal b -> 
     Bool.to_int @@ (a lxor b = 0)
   | StringVal{length=l1;data=d1}, StringVal{length=l2;data=d2} ->
     let mismatch = ref (l1 lxor l2) in
-    let len = min (Array.length d1) (Array.length d2) in
-    for i = 0 to len-1 do
+    let publen = min (Array.length d1) (Array.length d2) in
+    let seclen = min l1 l2 in
+    for i = 0 to publen-1 do
+      let bit = Bool.to_int(i < seclen) in
       let i1 = Char.code @@ d1.(i) in
       let i2 = Char.code @@ d2.(i) in
-      mismatch := (i1 lxor i2) lor !mismatch
+      mismatch := (bit land (i1 lxor i2)) lor !mismatch
+    done;
+    Bool.to_int (!mismatch = 0)
+  | PairVal(a1,a2), PairVal (b1,b2) ->
+    safeEq a1 b1 * safeEq a2 b2
+  | ArrayVal{length=l1;data=d1}, ArrayVal{length=l2;data=d2} ->
+    let mismatch = ref (l1 lxor l2) in
+    let publen = min (Array.length d1) (Array.length d2) in
+    let seclen = min l1 l2 in
+    for i = 0 to publen-1 do
+      let bit = Bool.to_int(i < seclen) in
+      let i = safeEq d1.(i) d2.(i) in
+      mismatch := (bit land (1 lxor i)) lor !mismatch
     done;
     Bool.to_int (!mismatch = 0)
   | _ -> raise @@ NotImplemented "safeEq"
@@ -151,27 +165,6 @@ let rec safeSelect (bit: int) (orig: value) (upd: value) =
       end
     | _ -> raise @@ InterpFatal "safeBind" in
   _S orig upd
-
-  let safeStringBind (bit : int) (orig : char array) (upd : char array) =
-    let len, padded_orig, padded_upd =
-      match Array.length orig, Array.length upd with
-        | l1, l2 when l1 < l2 ->
-          l2,
-          Array.append orig @@ Array.make (l2-l1) '\000',
-          upd
-        | l1, l2 when l1 > l2 ->
-          l1,
-          orig,
-          Array.append upd @@ Array.make (l1-l2) '\000'
-        | l1, _ ->
-          l1, orig, upd in
-    let res = Array.make len '\000' in
-    for i = 0 to len-1 do
-      let i1 = (1 lxor bit) * (Char.code @@ padded_orig.(i)) in
-      let i2 = bit * (Char.code @@ padded_upd.(i)) in
-      res.(i) <- Char.chr @@ i1 lor i2
-    done;
-    res
 
 let op oper v1 v2 =
   match oper,v1,v2 with
@@ -269,8 +262,10 @@ and writevar ctxt updkind upd mode =
           match updkind with
           | ASSIGN -> H.add table x upd
           | BIND ->
-            let orig = lookup table x in
-            H.add table x @@ safeSelect mode orig upd
+            if mode = 1
+            then
+              let orig = lookup table x in
+              H.add table x @@ safeSelect mode orig upd
           end
         | [(i,lvl)], ArrayVal{length;data} ->
           let maxidx = length -1 in
@@ -281,7 +276,8 @@ and writevar ctxt updkind upd mode =
           if L.flows_to lvl L.bottom
           then (* public index, no problem! *)
             match updkind with
-            | ASSIGN -> data.(idx) <- upd
+            | ASSIGN ->
+              if mode = 1 then data.(idx) <- upd
             | BIND ->
               let orig = lookup table x in
               data.(idx) <- safeSelect mode orig upd
@@ -298,14 +294,6 @@ and writevar ctxt updkind upd mode =
           let cnd2 = Bool.to_int(i > maxidx) in
           let idx = cnd1 * i in
           let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
-          (* TODO:
-           - if idx is secret, then we must bind at every index
-           - if idx is public, but pc is secret (BindCmd), then we must bind at idx
-           - if idx and pc are both public, then we can do straight assign
-           How to:
-           - read first index as res 
-           - at every index, safe bind into res *)
-          
           if L.flows_to lvl L.bottom
           then f tl data.(idx) mode (* public index, no problem! *)
           else 
@@ -346,6 +334,8 @@ and eval ctxt =
     | A.LengthExp{public;var} ->
       begin
         match readvar ctxt var with
+        | StringVal{length;data} ->
+          if public then IntVal (Array.length data) else IntVal length
         | ArrayVal{length;data} ->
           if public then IntVal (Array.length data) else IntVal length
         | _ -> raise @@ InterpFatal "LengthExp"
