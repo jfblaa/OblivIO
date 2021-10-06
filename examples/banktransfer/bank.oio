@@ -1,6 +1,6 @@
 BANK
 
-var balance : int[]@{H} = [123,745,433,42,909];
+var balance : int[]@{H} = [123,445,433,42,909];
 
 TRANSFER(sender : (int*int)@{H} -> (), msg : (int*(int*int))@{H}) {
     var from : int@{H} = fst msg;

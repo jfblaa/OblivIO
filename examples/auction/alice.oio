@@ -1,36 +1,23 @@
 ALICE
 
-var int@{H} max_bid := 432;
+var max_bid : int@{H} = 432;
 
-channel int@{H} AUCTIONHOUSE/BID_ALICE;
+AUCTION_STATUS(sender: (string*int)@{H} -> int@{H}, status : int@{H}) {
+    var bid : int@{H} = 0;
 
-AUCTION_STATUS(int@{H} winning_bid : m)
-!{
-    skip;
-}
-?{
-    oblif winning_bid < max_bid
+    ;;
+
+    oblif status < max_bid
     then {
-        oblif winning_bid <> -1
-        then winning_bid ?= winning_bid+1;
+        oblif status != -1
+        then bid ?= status+1;
         else skip;
-        send(AUCTIONHOUSE/BID_ALICE,winning_bid);
+        send(sender,AUCTION_STATUS,("Alice",bid));
     }
     else skip;
 }
 
-AUCTION_WINNER_NAME(string@{H} name : m)
-!{
-    skip;
-}
-?{
-    print("Auction won by",name);
-}
-
-AUCTION_WINNER_BID(int@{H} amount : m)
-!{
-    skip;
-}
-?{
-    print("Winning bid was",amount);
+AUCTION_OVER(winner : (string*int)@{H}) {
+    print("Auction won by", fst winner);
+    print("Winning bid was", snd winner);
 }

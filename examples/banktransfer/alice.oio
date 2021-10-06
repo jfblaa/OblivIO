@@ -3,7 +3,7 @@ ALICE
 channel BANK/TRANSFER : (int*(int*int))@{H} -> (int*int)@{H};
 
 var my_id : int@{H} = 1; // Alice
-var amount : int@{H} = 200;
+var amount : int@{H} = 500;
 var to_id : int@{H} = 3; // Bob
 
 START(x : int@{}) {
