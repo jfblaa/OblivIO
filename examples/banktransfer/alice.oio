@@ -1,6 +1,6 @@
 ALICE
 
-channel BANK/TRANSFER : (int*(int*int))@{H} -> (int*int)@{H};
+channel BANK/TRANSFER : (int*(int*int))@{H};
 
 var my_id : int@{H} = 1; // Alice
 var amount : int@{H} = 500;
@@ -11,7 +11,7 @@ START(x : int@{}) {
 
     ;;
 
-    send(BANK/TRANSFER,INSUFFICIENT_FUNDS,msg);
+    send(BANK/TRANSFER,msg);
 }
 
 INSUFFICIENT_FUNDS(status : (int*int)@{H}) {

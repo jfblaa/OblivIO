@@ -1,8 +1,10 @@
 BANK
 
+channel ALICE/INSUFFICIENT_FUNDS : (int*int)@{H};
+
 var balance : int[]@{H} = [123,445,433,42,909];
 
-TRANSFER(sender : (int*int)@{H} -> (), msg : (int*(int*int))@{H}) {
+TRANSFER(msg : (int*(int*int))@{H}) {
     var from : int@{H} = fst msg;
     var amount : int@{H} = fst snd msg;
     var to : int@{H} = snd snd msg;
@@ -15,7 +17,7 @@ TRANSFER(sender : (int*int)@{H} -> (), msg : (int*(int*int))@{H}) {
         balance[from] ?= balance[from] - amount;
         balance[to] ?= balance[to] + amount;
     } else {
-        send(sender,(amount,balance[from]));
+        send(ALICE/INSUFFICIENT_FUNDS,(amount,balance[from]));
     }
     print("Balances", balance);
 }

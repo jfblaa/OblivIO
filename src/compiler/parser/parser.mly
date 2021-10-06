@@ -2,7 +2,6 @@
   open Common.Absyn
   module L = Common.Level
   module T = Common.Types
-  module C = Common.Channel
 %}
 
 %token EOF
@@ -13,7 +12,7 @@
 %token SEMICOLON COMMA SEPARATOR DOT
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
-%token FST SND ARROW PUBLEN SECLEN
+%token FST SND PUBLEN SECLEN
 %token COLON SIZE AT PRINT PADTO
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
@@ -114,10 +113,8 @@ cmd_base:
   { WhileCmd{test; body} }
 | v=var BIND INPUT LPAREN size=exp RPAREN SEMICOLON
   { InputCmd {var=v;size} }
-| SEND LPAREN node=ID DIVIDE ch=ID COMMA replyto=ioption(terminated(ID,COMMA)) exp=exp RPAREN SEMICOLON
-  { SendCmd{channel=Explicit(node,ch);replyto;exp} }
-| SEND LPAREN ch=ID COMMA replyto=ioption(terminated(ID,COMMA)) exp=exp RPAREN SEMICOLON
-  { SendCmd{channel=Implicit ch;replyto;exp} }
+| SEND LPAREN node=ID DIVIDE channel=ID COMMA exp=exp RPAREN SEMICOLON
+  { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
 
@@ -144,17 +141,11 @@ basetype:
 type_anno:
 | base=basetype AT level=lvl  { T.Type{base;level} }
 
-ch_type_anno:
-| reads=type_anno ARROW w=type_anno
- { T.ChType{reads;writes=Some w}}
-| reads=type_anno ARROW LPAREN RPAREN
- { T.ChType{reads;writes=None}}
-
 decl:
 | VAR x=ID COLON ty=type_anno ASSIGN init=exp SEMICOLON
   { VarDecl {ty; x; init; pos=$startpos} }
-| CHANNEL node=ID DIVIDE ch=ID COLON chty=ch_type_anno SEMICOLON
-  { ChannelDecl {chty; node; ch; pos=$startpos} }
+| CHANNEL node=ID DIVIDE ch=ID COLON ty=type_anno SEMICOLON
+  { ChannelDecl {ty; node; ch; pos=$startpos} }
 | INPUT COLON ty=type_anno SEMICOLON
   { InputDecl {ty; pos=$startpos} }
 
@@ -169,13 +160,9 @@ decl:
 %inline prelude:
 | cmd=cmd_seq SEPARATOR { cmd }
 
-%inline reply:
-| reply=ID COLON replyty=ch_type_anno COMMA
-  { reply, replyty }
-
 ch:
-| ch=ID LPAREN replych=ioption(reply) x=ID COLON ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
-  { Ch {ch;x;ty;replych;decls;prelude;body;pos=$startpos} }
+| ch=ID LPAREN x=ID COLON ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
+  { Ch {ch;x;ty;decls;prelude;body;pos=$startpos} }
 
 (* Top-level *)
 program:

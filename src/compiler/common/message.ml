@@ -2,7 +2,7 @@ module V = Value
 module L = Level
 
 type message
-= Relay of {sender: string; replyto: string option; receiver: string; channel: string; level: L.level; bit: int; value: V.value}
+= Relay of {sender: string; receiver: string; channel: string; level: L.level; bit: int; value: V.value}
   | Greet of {sender: string}
   | Kill
 

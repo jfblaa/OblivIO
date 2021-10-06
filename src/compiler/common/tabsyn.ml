@@ -1,6 +1,5 @@
 type pos = Lexing.position 
 type level = Level.level
-type channel = Channel.channel
 
 module T=Types
 
@@ -9,11 +8,11 @@ include Oper
 type program = Prog of { node: string; decls: decl list; chs: ch list }
 and decl
   = VarDecl of { x: string; ty: T.ty; init: exp; pos: pos }
-  | ChannelDecl of { node: string; ch: string; chty: T.chty; pos: pos }
+  | ChannelDecl of { node: string; ch: string; ty: T.ty; pos: pos }
   | InputDecl of {ty: T.ty; pos: pos }
 and hldecl = LocalDecl of { x: string; ty: T.ty; init: exp; pos: pos }
 and ch
-  = Ch of { ch: string; x: string; ty: T.ty; replych: (string * T.chty) option; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
+  = Ch of { ch: string; x: string; ty: T.ty; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; loc: varloc; ty: T.ty; pos: pos }
 and varloc = LOCAL | STORE
 and var_base =
@@ -40,7 +39,8 @@ and cmd_base
   | AssignCmd of { var: var; exp: exp }
   | BindCmd of { var: var; exp: exp }
   | InputCmd of { var: var; size: exp }
-  | SendCmd of { channel: channel; replyto: string option; exp: exp }
+  | SendCmd of { node: string; channel: string; exp: exp }
+  | ReplyCmd of { node: string; channel: string; exp: exp }
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }

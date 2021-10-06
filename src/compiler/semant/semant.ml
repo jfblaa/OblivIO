@@ -6,7 +6,6 @@ module A = Absyn
 module Err = Errorenv
 module Ty = Types
 module L = Level
-module C = Channel
 
 module H = Hashtbl
 
@@ -16,7 +15,7 @@ type context
   = { gamma : (string, Ty.ty) H.t
     ; delta : (string, Ty.ty) H.t
     ; mutable input: Ty.ty option
-    ; lambda : (C.channel, Ty.chty) H.t
+    ; lambda : (string * string, Ty.ty) H.t
     ; hltable : (string, Ty.ty) H.t
     ; err :  Err.errorenv 
     }
@@ -28,12 +27,6 @@ let _bot base =
 let errTy err pos msg =
   Err.error err pos @@ msg;
   _bot Ty.ERROR
-
-let errChTy err pos msg =
-  Err.error err pos @@ msg;
-  let reads = _bot Ty.ERROR in
-  let writes = None in
-  T.ChType{reads;writes}
 
 let lookupVar ({gamma;delta;err;_}) v pos = 
   match H.find_opt delta v with
@@ -53,10 +46,10 @@ let lookupHandler ({hltable;err;_}) hl pos =
   | Some ty -> ty
   | None -> errTy err pos @@ "undeclared handler " ^ hl
 
-let lookupRemote ({lambda;err;_}) channel pos = 
-  match H.find_opt lambda channel with
+let lookupRemote ({lambda;err;_}) node channel pos = 
+  match H.find_opt lambda (node,channel) with
   | Some ty -> ty
-  | None -> errChTy err pos @@ "undeclared channel " ^ C.to_string channel
+  | None -> errTy err pos @@ "undeclared channel " ^ node ^ "/" ^ channel
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
@@ -257,24 +250,12 @@ let transCmd ({err;_} as ctxt) =
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
       fromBase @@ InputCmd{var;size}
-    | SendCmd {channel;replyto;exp} ->
-      let T.ChType{reads;writes} = lookupRemote ctxt channel pos in
+    | SendCmd {node;channel;exp} ->
+      let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkBaseType ety reads err pos;
-      checkFlowTypePC pc ety reads err pos;
-      begin 
-        match writes,replyto with
-        | Some wty,Some hl ->
-          let hlty = lookupHandler ctxt hl pos in
-          checkBaseType wty hlty err pos;
-          checkFlowType wty hlty err pos
-        | None, None -> ()
-        | Some wty, None ->
-          Err.error err pos @@ "unhandled reply of type " ^ T.to_string wty ^ " from channel " ^ C.to_string channel
-        | None, Some _ ->
-          Err.error err pos @@ "channel " ^ (C.to_string channel) ^ " does not reply"
-      end;
-      fromBase @@ SendCmd{channel;replyto;exp=e}
+      checkBaseType ety chty err pos;
+      checkFlowTypePC pc ety chty err pos;
+      fromBase @@ SendCmd{node;channel;exp=e}
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
@@ -316,9 +297,9 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     checkBaseType initty ty err pos;
     checkFlowType initty ty err pos;
     VarDecl{x;ty;init;pos}
-  | A.ChannelDecl {chty;node;ch;pos} ->
-    H.add lambda (Explicit (node,ch)) chty;
-    ChannelDecl{node;ch;chty;pos}
+  | A.ChannelDecl {ty;node;ch;pos} ->
+    H.add lambda (node,ch) ty;
+    ChannelDecl{node;ch;ty;pos}
   | A.InputDecl{ty;pos} ->
     begin
     match input with
@@ -328,23 +309,13 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     checkString ty err pos;
     InputDecl{ty;pos}
 
-let transCh ({delta;lambda;_} as ctxt) (A.Ch{ch;x;ty;replych;decls;prelude;body;pos}) =
+let transCh ({delta;_} as ctxt) (A.Ch{ch;x;ty;decls;prelude;body;pos}) =
   H.add delta x ty;
-  begin 
-    match replych with
-    | Some (ch,chty) -> H.add lambda (Implicit ch) chty
-    | None -> ()
-  end;
   let decls = List.map (transLocal ctxt) decls in
   let prelude = Option.map (transCmd ctxt L.bottom) prelude in
   let body = transCmd ctxt (T.level ty) body in
   H.clear delta;
-  begin 
-    match replych with
-    | Some (ch,_) -> H.remove lambda (Implicit ch);
-    | None -> ()
-  end;
-  Ch{ch;x;ty;replych;decls;prelude;body;pos}
+  Ch{ch;x;ty;decls;prelude;body;pos}
 
 let transHlDecl {hltable;_} (A.Ch{ch;ty;_}) =
   H.add hltable ch ty

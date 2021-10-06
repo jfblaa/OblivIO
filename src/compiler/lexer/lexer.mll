@@ -28,7 +28,6 @@ rule token = parse
 | '}'                 { RBRACE }
 | '['                 { LBRACK }
 | ']'                 { RBRACK }
-| "->"                { ARROW }
 | '+'                 { PLUS }
 | '-'                 { MINUS }
 | '*'                 { TIMES }

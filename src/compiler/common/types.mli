@@ -9,7 +9,6 @@ type basetype =
   | ERROR
 
 type ty = Type of {base: basetype; level: L.level}
-type chty = ChType of {reads: ty; writes: ty option}
 
 val base: ty -> basetype
 val level: ty -> L.level

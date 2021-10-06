@@ -1,8 +1,10 @@
 BOB
 
+channel AUCTIONHOUSE/BID_BOB: (string*int)@{H};
+
 var max_bid : int@{H} = 350;
 
-AUCTION_STATUS(sender: (string*int)@{H} -> int@{H}, status : int@{H}) {
+AUCTION_STATUS(status : int@{H}) {
     var bid : int@{H} = 0;
 
     ;;
@@ -12,7 +14,7 @@ AUCTION_STATUS(sender: (string*int)@{H} -> int@{H}, status : int@{H}) {
         oblif status != -1
         then bid ?= status+1;
         else skip;
-        send(sender,AUCTION_STATUS,("Bob",bid));
+        send(AUCTIONHOUSE/BID_BOB,("Bob",bid));
     }
     else skip;
 }

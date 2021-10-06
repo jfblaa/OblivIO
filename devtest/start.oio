@@ -1,11 +1,10 @@
 ALICE
 
-var string@{} test := "Hello";
+channel OBLIVIO/HELLO : int@{};
 
-START(int@{} ignored) {
-    print(test);
-    oblif 1
-    then test ?= "World";
-    else skip;
-    print(test);
+START(sender, x : int@{}) {
+    send(OBLIVIO/HELLO,x);
+    print("OK");
+    send(sender/HELLO,x);
+    print("OK");
 }

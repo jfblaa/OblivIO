@@ -4,14 +4,13 @@ module L = Common.Level
 module A = Common.Tabsyn
 module V = Common.Value
 module Ty = Common.Types
-module C = Common.Channel
 
 module H = Hashtbl
 
 open Common.Value
 open Common.Oper
 
-type handler_info = {x: string; replych: (string*Ty.chty) option; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
+type handler_info = {x: string; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
 type sync_queue =
@@ -24,11 +23,10 @@ type context =
   ; message_queue: sync_queue
   ; mutable input_buffer: char array
   ; mutable mode: int list
-  ; mutable replyto: (string*string) option
   ; memory: (string, value) H.t
   ; store: (string, value) H.t
   ; handlers: (string, handler_info) H.t
-  ; trust_map: (C.channel, L.level) H.t
+  ; trust_map: (string * string, L.level) H.t
   ; server: server_info
   }
 
@@ -64,6 +62,10 @@ let safeDiv a b =
 
 let _int = function
   | IntVal n -> n
+  | _ -> raise @@ InterpFatal "_I"
+
+let _string = function
+  | StringVal{data;_} -> data |> Array.to_seq |> String.of_seq
   | _ -> raise @@ InterpFatal "_I"
 
 let safeConcat (arr1 : char array) (arr2 : char array) =
@@ -405,15 +407,19 @@ let interpCmd ctxt =
         | _ -> raise @@ InterpFatal "InputCmd"
       end
       
-    | SendCmd { channel; replyto; exp } ->
-      let level = lookup ctxt.trust_map channel in
+    | SendCmd { node; channel; exp } ->
+      let level = lookup ctxt.trust_map (node,channel) in
       let value = eval ctxt exp in
       let bit = getMode () in
-      let receiver, channel =
-        match channel with
-        | Explicit (node,ch) -> node, ch
-        | Implicit _ -> Option.get ctxt.replyto in
-      let msg = M.Relay{sender=ctxt.name;replyto;receiver;channel;level;bit;value} in
+      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;bit;value} in
+      output_value ctxt.server.output msg;
+      flush ctxt.server.output
+    | ReplyCmd { node; channel; exp } ->
+      let receiver = _string @@ lookup ctxt.memory node in
+      let level = lookup ctxt.trust_map (receiver,channel) in
+      let value = eval ctxt exp in
+      let bit = getMode () in
+      let msg = M.Relay{sender=ctxt.name;receiver;channel;level;bit;value} in
       output_value ctxt.server.output msg;
       flush ctxt.server.output
     | IfCmd { test; thn; els } ->
@@ -462,16 +468,11 @@ let interpCmd ctxt =
 let rec loop ctxt =
   begin
   match input_value ctxt.server.input with
-  | M.Relay{sender;replyto;channel;bit;value;_} ->
+  | M.Relay{channel;bit;value;_} ->
     begin
       match H.find_opt ctxt.handlers channel with
-      | Some {x;replych;decls;prelude;body} ->
+      | Some {x;decls;prelude;body} ->
         H.add ctxt.memory x value;
-        ctxt.replyto <- Option.bind replyto (fun ch -> Some (sender,ch));
-        Option.iter
-          (fun (ch,Ty.ChType{reads;_}) ->
-            let lvl = Ty.level reads in
-            H.add ctxt.trust_map (Implicit ch) lvl) replych;
         let f (A.LocalDecl{x;init;_}) =
           H.add ctxt.memory x @@ eval ctxt init in
         List.iter f decls;
@@ -485,10 +486,6 @@ let rec loop ctxt =
         end;
         interpCmd ctxt body;
         H.clear ctxt.memory;
-        ctxt.replyto <- None;
-        Option.iter
-          (fun (ch,_) ->
-            H.remove ctxt.trust_map (Implicit ch)) replych;
       | None -> ()
     end
   | _ -> ()
@@ -517,24 +514,23 @@ let interp (A.Prog{node;decls;chs}) =
       }
     ; input_buffer = Array.make 256 '\000'
     ; mode = []
-    ; replyto = None
     ; memory = H.create 1024
     ; store = H.create 1024
     ; handlers = H.create 1024
     ; trust_map = H.create 1024
     ; server = {input;output}
     } in
-  let f (A.Ch{ch;x;replych;decls;prelude;body;_}) =
-    H.add ctxt.handlers ch {x;replych;decls;prelude;body} in
+  let f (A.Ch{ch;x;decls;prelude;body;_}) =
+    H.add ctxt.handlers ch {x;decls;prelude;body} in
   let g = function
     | (A.VarDecl{x;init;_}) ->
       let i = eval ctxt init in
       H.add ctxt.store x i
     | (A.InputDecl _) ->
       ()
-    | (A.ChannelDecl{node;ch;chty=Ty.ChType{reads;_};_}) ->
-      let lvl = Ty.level reads in
-      H.add ctxt.trust_map (Explicit (node,ch)) lvl in
+    | (A.ChannelDecl{node;ch;ty;_}) ->
+      let lvl = Ty.level ty in
+      H.add ctxt.trust_map (node,ch) lvl in
   
   List.iter f chs;
   List.iter g decls;
