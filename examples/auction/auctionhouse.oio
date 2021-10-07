@@ -17,38 +17,17 @@ START(i : int@{}) {
     send(CAROL/AUCTION_STATUS,0);
 }
 
-BID_ALICE(bid : (string*int)@{H}) {
+BID(sender, bid : (string*int)@{H}) {
     var status : int@{H} = 0;
     ;;
     counter = counter - 1;
-    if counter <= 0
-    then send(ALICE/AUCTION_OVER,winner);
-    else skip;
-    ;;
-    if counter > 0
+    if counter == 0
     then {
-        oblif (snd winner) < (snd bid)
-        then {
-            winner ?= bid;
-            status ?= -1;
-        }
-        else {
-            oblif (fst winner) != (fst bid)
-            then status ?= (snd winner);
-            else status ?= -1;
-        }
-        send(ALICE/AUCTION_STATUS,status);
+        send(ALICE/AUCTION_OVER,winner);
+        send(BOB/AUCTION_OVER,winner);
+        send(CAROL/AUCTION_OVER,winner);
     }
     else skip;
-}
-
-BID_BOB(bid : (string*int)@{H}) {
-    var status : int@{H} = 0;
-    ;;
-    counter = counter - 1;
-    if counter <= 0
-    then send(BOB/AUCTION_OVER,winner);
-    else skip;
     ;;
     if counter > 0
     then {
@@ -62,32 +41,11 @@ BID_BOB(bid : (string*int)@{H}) {
             then status ?= (snd winner);
             else status ?= -1;
         }
-        send(BOB/AUCTION_STATUS,status);
-    }
-    else skip;
-}
-
-BID_CAROL(bid : (string*int)@{H}) {
-    var status : int@{H} = 0;
-    ;;
-    counter = counter - 1;
-    if counter <= 0
-    then send(CAROL/AUCTION_OVER,winner);
-    else skip;
-    ;;
-    if counter > 0
-    then {
-        oblif (snd winner) < (snd bid)
-        then {
-            winner ?= bid;
-            status ?= -1;
-        }
-        else {
-            oblif (fst winner) != (fst bid)
-            then status ?= (snd winner);
-            else status ?= -1;
-        }
-        send(CAROL/AUCTION_STATUS,status);
+        if sender == "ALICE"
+        then send(ALICE/AUCTION_STATUS,status);
+        else if sender == "BOB"
+        then send(BOB/AUCTION_STATUS,status);
+        else send(CAROL/AUCTION_STATUS,status);
     }
     else skip;
 }

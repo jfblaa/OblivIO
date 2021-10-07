@@ -1,6 +1,6 @@
 ALICE
 
-channel AUCTIONHOUSE/BID_ALICE : (string*int)@{H};
+channel AUCTIONHOUSE/BID : (string*int)@{H};
 
 var max_bid : int@{H} = 432;
 
@@ -14,7 +14,7 @@ AUCTION_STATUS(status : int@{H}) {
         oblif status != -1
         then bid ?= status+1;
         else skip;
-        send(AUCTIONHOUSE/BID_ALICE,("Alice",bid));
+        send(AUCTIONHOUSE/BID,("Alice",bid));
     }
     else skip;
 }

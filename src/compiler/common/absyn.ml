@@ -12,7 +12,7 @@ and decl
   | InputDecl of { ty: T.ty; pos: pos }
 and hldecl = LocalDecl of { ty: T.ty; x: string; init: exp; pos: pos }
 and ch
-  = Ch of { ch: string; x: string; ty: T.ty; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
+  = Ch of { ch: string; sender_opt: string option; x: string; ty: T.ty; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; pos: pos}
 and var_base
   = SimpleVar of string

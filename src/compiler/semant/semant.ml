@@ -309,13 +309,21 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     checkString ty err pos;
     InputDecl{ty;pos}
 
-let transCh ({delta;_} as ctxt) (A.Ch{ch;x;ty;decls;prelude;body;pos}) =
+let transCh ({delta;_} as ctxt) (A.Ch{ch;sender_opt;x;ty;decls;prelude;body;pos}) =
   H.add delta x ty;
+  begin
+    match sender_opt with
+    | Some sender ->
+      let base = T.STRING in
+      let level = L.bottom in
+      H. add delta sender (T.Type{base;level})
+    | None -> ()
+  end;
   let decls = List.map (transLocal ctxt) decls in
   let prelude = Option.map (transCmd ctxt L.bottom) prelude in
   let body = transCmd ctxt (T.level ty) body in
   H.clear delta;
-  Ch{ch;x;ty;decls;prelude;body;pos}
+  Ch{ch;sender_opt;x;ty;decls;prelude;body;pos}
 
 let transHlDecl {hltable;_} (A.Ch{ch;ty;_}) =
   H.add hltable ch ty

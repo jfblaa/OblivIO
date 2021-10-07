@@ -139,18 +139,18 @@ basetype:
   { T.ARRAY b }
 
 type_anno:
-| base=basetype AT level=lvl  { T.Type{base;level} }
+| COLON base=basetype AT level=lvl  { T.Type{base;level} }
 
 decl:
-| VAR x=ID COLON ty=type_anno ASSIGN init=exp SEMICOLON
+| VAR x=ID ty=type_anno ASSIGN init=exp SEMICOLON
   { VarDecl {ty; x; init; pos=$startpos} }
-| CHANNEL node=ID DIVIDE ch=ID COLON ty=type_anno SEMICOLON
+| CHANNEL node=ID DIVIDE ch=ID ty=type_anno SEMICOLON
   { ChannelDecl {ty; node; ch; pos=$startpos} }
-| INPUT COLON ty=type_anno SEMICOLON
+| INPUT ty=type_anno SEMICOLON
   { InputDecl {ty; pos=$startpos} }
 
 %inline localdecl:
-| VAR x=ID COLON ty=type_anno ASSIGN init=exp SEMICOLON
+| VAR x=ID ty=type_anno ASSIGN init=exp SEMICOLON
   { LocalDecl {ty; x; init; pos=$startpos} }
 
 %inline localdecls:
@@ -161,8 +161,8 @@ decl:
 | cmd=cmd_seq SEPARATOR { cmd }
 
 ch:
-| ch=ID LPAREN x=ID COLON ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
-  { Ch {ch;x;ty;decls;prelude;body;pos=$startpos} }
+| ch=ID LPAREN sender_opt=ioption(terminated(ID,COMMA)) x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
+  { Ch {ch;sender_opt;x;ty;decls;prelude;body;pos=$startpos} }
 
 (* Top-level *)
 program:

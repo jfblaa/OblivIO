@@ -10,7 +10,7 @@ module H = Hashtbl
 open Common.Value
 open Common.Oper
 
-type handler_info = {x: string; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
+type handler_info = {x: string; sender_opt: string option; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
 type sync_queue =
@@ -468,10 +468,18 @@ let interpCmd ctxt =
 let rec loop ctxt =
   begin
   match input_value ctxt.server.input with
-  | M.Relay{channel;bit;value;_} ->
+  | M.Relay{sender;channel;bit;value;_} ->
     begin
       match H.find_opt ctxt.handlers channel with
-      | Some {x;decls;prelude;body} ->
+      | Some {sender_opt;x;decls;prelude;body} ->
+        begin
+          match sender_opt with
+          | Some s ->
+            let length = String.length sender in
+            let data = sender |> String.to_seq |> Array.of_seq in
+            H.add ctxt.memory s (StringVal{length;data})
+          | None -> ()
+        end;
         H.add ctxt.memory x value;
         let f (A.LocalDecl{x;init;_}) =
           H.add ctxt.memory x @@ eval ctxt init in
@@ -520,8 +528,8 @@ let interp (A.Prog{node;decls;chs}) =
     ; trust_map = H.create 1024
     ; server = {input;output}
     } in
-  let f (A.Ch{ch;x;decls;prelude;body;_}) =
-    H.add ctxt.handlers ch {x;decls;prelude;body} in
+  let f (A.Ch{ch;sender_opt;x;decls;prelude;body;_}) =
+    H.add ctxt.handlers ch {x;sender_opt;decls;prelude;body} in
   let g = function
     | (A.VarDecl{x;init;_}) ->
       let i = eval ctxt init in

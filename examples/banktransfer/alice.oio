@@ -1,21 +1,25 @@
 ALICE
 
-channel BANK/TRANSFER : (int*(int*int))@{H};
+channel DE_LUXES_UNIQUES/ORDER : (int*int)@{H};
 
 var my_id : int@{H} = 1; // Alice
-var amount : int@{H} = 500;
-var to_id : int@{H} = 3; // Bob
+var item_id : int@{H} = 3; // Handbag
 
 START(x : int@{}) {
-    var msg : (int*(int*int))@{H} = (my_id,(amount,to_id));
+    var order : (int*int)@{H} = (item_id,my_id);
 
     ;;
 
-    send(BANK/TRANSFER,msg);
+    send(DE_LUXES_UNIQUES/ORDER,order);
 }
 
-INSUFFICIENT_FUNDS(status : (int*int)@{H}) {
-    print("Payment failed!");
-    print("Tried to send", fst status);
-    print("Current balance", snd status);
+OK(msg : (int*(string*int))@{H}) {
+    print("Order accepted");
+    print("Order ID", fst msg);
+    print("Item", fst snd msg);
+    print("Price", snd snd msg);
+}
+
+ERROR(code : int@{H}) {
+    print("Bank returned error code", code);
 }

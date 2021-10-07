@@ -1,6 +1,6 @@
 CAROL
 
-channel AUCTIONHOUSE/BID_CAROL : (string*int)@{H};
+channel AUCTIONHOUSE/BID : (string*int)@{H};
 
 var max_bid : int@{H} = 512;
 
@@ -14,7 +14,7 @@ AUCTION_STATUS(status : int@{H}) {
         oblif status != -1
         then bid ?= status+1;
         else skip;
-        send(AUCTIONHOUSE/BID_CAROL,("Carol",bid));
+        send(AUCTIONHOUSE/BID,("Carol",bid));
     }
     else skip;
 }
