@@ -24,6 +24,9 @@ type context
 let _bot base =
   Ty.Type{base;level=L.bottom}
 
+let raiseTo (T.Type{base;level}) lvl =
+  T.Type{base;level=L.lub level lvl}
+
 let errTy err pos msg =
   Err.error err pos @@ msg;
   _bot Ty.ERROR
@@ -59,11 +62,17 @@ let v_ty_lvl (Var{ty;_} as v) = (v,ty,T.level ty)
 
 let v_ty_lvl_loc (Var{ty;loc;_} as v) = (v,ty,T.level ty,loc)
 
-let isSameBase t1 t2 =
+let rec isSameBase t1 t2 =
   match Ty.base t1, Ty.base t2 with
   | Ty.ERROR, _ -> true
   | _, Ty.ERROR -> true
-  | a, b -> a = b
+  | T.INT, T.INT -> true
+  | T.STRING, T.STRING -> true
+  | T.PAIR (a1,a2), T.PAIR (b1,b2) ->
+    isSameBase a1 b1 && isSameBase a2 b2
+  | T.ARRAY t1, T.ARRAY t2 ->
+    isSameBase t1 t2
+  | _ -> false
 
 let checkBaseType t1 t2 err pos =
   if not (isSameBase t1 t2)
@@ -78,14 +87,9 @@ let checkFlowType t1 t2 err pos =
   if not (L.flows_to l1 l2)
   then Err.error err pos @@ "illegal flow from " ^ L.to_string l1 ^ " to " ^ L.to_string l2
 
-let checkFlowTypePC pc t1 t2 err pos =
-    let l1, l2 = Ty.level t1, Ty.level t2 in
-    if not (L.flows_to (L.lub pc l1) l2)
-    then Err.error err pos @@ "illegal flow from " ^ L.to_string l1 ^ " to " ^ L.to_string l2 ^ " at pc " ^ L.to_string pc
-
 let checkComparable t1 t2 err pos =
-  let rec _check b1 b2 =
-    match b1, b2 with
+  let rec _check t1 t2 =
+    match T.base t1, T.base t2 with
     | Ty.INT, Ty.INT -> ()
     | Ty.STRING, Ty.STRING -> ()
     | Ty.PAIR (a1,a2), Ty.PAIR (b1,b2) ->
@@ -93,7 +97,21 @@ let checkComparable t1 t2 err pos =
     | Ty.ARRAY t1, Ty.ARRAY t2 ->
       _check t1 t2
     | b1, b2 -> Err.error err pos @@ "types " ^ Ty.base_to_string b1 ^ " and " ^ Ty.base_to_string b2 ^ " do not match"
-  in _check (T.base t1) (T.base t2)
+  in _check t1 t2
+
+let rec checkAssignable t1 t2 err pos =
+  checkFlowType t1 t2 err pos;
+  match T.base t1, T.base t2 with
+  | T.ERROR, _ -> ()
+  | _, T.ERROR -> ()
+  | T.INT, T.INT -> ()
+  | T.STRING, T.STRING -> ()
+  | T.PAIR (a1,a2), T.PAIR (b1,b2) ->
+    checkAssignable a1 b1 err pos;
+    checkAssignable a2 b2 err pos;
+  | T.ARRAY t1, T.ARRAY t2 ->
+    checkAssignable t1 t2 err pos
+  | b1, b2 -> Err.error err pos @@ "cannot assign expression of type " ^ Ty.base_to_string b1 ^ " to variable of type " ^ Ty.base_to_string b2
 
 let checkLowPC pc err pos =
   if not (L.flows_to pc L.bottom)
@@ -150,8 +168,8 @@ let rec transExp ({err;_} as ctxt) =
       let (exp,ty,level) = e_ty_lvl @@ trexp exp in
       let proj,ty =
         match proj,T.base ty with
-        | Fst, T.PAIR (base,_) -> Fst, T.Type{base;level}
-        | Snd, T.PAIR (_,base) -> Snd, T.Type{base;level}
+        | Fst, T.PAIR (t,_) -> Fst, raiseTo t level
+        | Snd, T.PAIR (_,t) -> Snd, raiseTo t level
         | Fst, _ -> Fst, errTy err pos @@ "not a pair type " ^ T.to_string ty
         | Snd, _ -> Snd, errTy err pos @@ "not a pair type " ^ T.to_string ty in
       ProjExp{proj;exp} ^! ty
@@ -166,25 +184,24 @@ let rec transExp ({err;_} as ctxt) =
       | _ -> LengthExp{public;var} ^! errTy err pos @@ "not a string or array type " ^ T.to_string ty
       end
     | PairExp (a,b) ->
-      let (a,aty,alvl) = e_ty_lvl @@ trexp a in
-      let (b,bty,blvl) = e_ty_lvl @@ trexp b in
-      let base = T.PAIR (T.base aty,T.base bty) in
-      let level = L.lub alvl blvl in
-      PairExp (a,b) ^! T.Type{base;level}
+      let (a,aty) = e_ty @@ trexp a in
+      let (b,bty) = e_ty @@ trexp b in
+      let base = T.PAIR (aty,bty) in
+      PairExp (a,b) ^! T.Type{base;level=L.bottom}
     | ArrayExp arr ->
-      let ty,lvl = match arr with
+      let ty = match arr with
       | hd::_ ->
-        let _, ty,lvl = e_ty_lvl @@ transExp ctxt hd in
-        ty, lvl
+        let _, ty = e_ty @@ transExp ctxt hd in
+        ty
       | _ ->
-        errTy err pos "array cannot be empty", L.bottom in
-      let f lvl exp =
-        let e,ety,elvl = e_ty_lvl @@ transExp ctxt exp in
+        errTy err pos "array cannot be empty" in
+      let f exp =
+        let e,ety = e_ty @@ transExp ctxt exp in
         checkBaseType ty ety err pos;
-        L.lub lvl elvl, e in
-      let level, arr = List.fold_left_map f lvl arr in
-      let base = T.ARRAY (T.base ty) in
-      ArrayExp arr ^! T.Type{base;level}
+        e in
+      let arr = List.map f arr in
+      let base = T.ARRAY ty in
+      ArrayExp arr ^! T.Type{base;level=L.bottom}
       
   in trexp
 and transVar ({err;_} as ctxt) =
@@ -201,11 +218,10 @@ and transVar ({err;_} as ctxt) =
       end
     | SubscriptVar {var;exp} ->
       let var,vty,vlvl,loc = v_ty_lvl_loc @@ trvar var in
-      let exp,ety = e_ty @@ transExp ctxt exp in
+      let exp,ety,elvl = e_ty_lvl @@ transExp ctxt exp in
       checkInt ety err pos;
-      checkFlowType ety vty err pos; 
       let t = match T.base vty with
-        | T.ARRAY base -> T.Type{base;level=vlvl}
+        | T.ARRAY t -> raiseTo t (L.lub vlvl elvl)
         | _ -> errTy err pos @@ "variable type not an array type: " ^ T.to_string vty in
       begin
       match loc with
@@ -232,29 +248,25 @@ let transCmd ({err;_} as ctxt) =
         | STORE -> 
           checkLowPC pc err pos
       end;
-      checkBaseType ety varty err pos;
-      checkFlowType ety varty err pos;
+      checkAssignable ety varty err pos;
       fromBase @@ AssignCmd{var;exp=e}
     | BindCmd {var;exp} ->
       let var,varty = v_ty @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkBaseType ety varty err pos;
-      checkFlowTypePC pc ety varty err pos;
+      checkAssignable (raiseTo ety pc) varty err pos;
       fromBase @@ BindCmd{var;exp=e}
     | InputCmd {var;size} ->
       let var,varty = v_ty @@ transVar ctxt var in
       let chty = lookupInternal ctxt pos in
       let size,sizety,sizelvl = e_ty_lvl @@ transExp ctxt size in
-      checkBaseType chty varty err pos;
-      checkFlowType chty varty err pos;
+      checkAssignable (raiseTo chty pc) varty err pos;
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
       fromBase @@ InputCmd{var;size}
     | SendCmd {node;channel;exp} ->
       let chty = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkBaseType ety chty err pos;
-      checkFlowTypePC pc ety chty err pos;
+      checkAssignable (raiseTo ety pc) chty err pos;
       fromBase @@ SendCmd{node;channel;exp=e}
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
@@ -280,23 +292,32 @@ let transCmd ({err;_} as ctxt) =
       fromBase @@ PrintCmd{info;exp}
   in trcmd
 
-let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty;x;init;pos}) =
-  H.add delta x ty;
+let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty_opt;x;init;pos}) =
   let init,initty = e_ty @@ transExp ctxt init in
-  checkBaseType initty ty err pos;
-  checkFlowType initty ty err pos;
-  LocalDecl{x;ty;init;pos}
+  begin
+  match ty_opt with
+  | Some ty ->
+    H.add delta x ty;
+    checkAssignable initty ty err pos;
+  | None ->
+    H.add delta x initty;
+  end;
+  LocalDecl{x;ty_opt;init;pos}
 
 let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
   match dec with
-  | A.VarDecl {ty;x;init;pos} ->
+  | A.VarDecl {ty_opt;x;init;pos} ->
     if H.mem gamma x
     then Err.error err pos @@ "variable " ^ x ^ " already declared";
-    H.add gamma x ty;
     let init,initty = e_ty @@ transExp ctxt init in
-    checkBaseType initty ty err pos;
-    checkFlowType initty ty err pos;
-    VarDecl{x;ty;init;pos}
+    begin
+    match ty_opt with
+    | Some ty ->
+      H.add gamma x ty;
+      checkAssignable initty ty err pos;
+    | None -> H.add gamma x initty
+    end;
+    VarDecl{x;ty_opt;init;pos}
   | A.ChannelDecl {ty;node;ch;pos} ->
     H.add lambda (node,ch) ty;
     ChannelDecl{node;ch;ty;pos}

@@ -133,25 +133,28 @@ basetype:
   { T.INT }
 | STRINGTYPE
   { T.STRING }
-| LPAREN b1=basetype TIMES b2=basetype RPAREN
-  { T.PAIR (b1,b2) }
-| b=basetype LBRACK RBRACK
-  { T.ARRAY b }
+| LPAREN t1=type_at_lvl TIMES t2=type_at_lvl RPAREN
+  { T.PAIR (t1,t2) }
+| t=type_at_lvl LBRACK RBRACK
+  { T.ARRAY t }
 
-type_anno:
-| COLON base=basetype AT level=lvl  { T.Type{base;level} }
+%inline type_at_lvl:
+| base=basetype AT level=lvl  { T.Type{base;level} }
+
+%inline type_anno:
+| COLON t=type_at_lvl  { t }
 
 decl:
-| VAR x=ID ty=type_anno ASSIGN init=exp SEMICOLON
-  { VarDecl {ty; x; init; pos=$startpos} }
+| VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
+  { VarDecl {ty_opt; x; init; pos=$startpos} }
 | CHANNEL node=ID DIVIDE ch=ID ty=type_anno SEMICOLON
   { ChannelDecl {ty; node; ch; pos=$startpos} }
 | INPUT ty=type_anno SEMICOLON
   { InputDecl {ty; pos=$startpos} }
 
 %inline localdecl:
-| VAR x=ID ty=type_anno ASSIGN init=exp SEMICOLON
-  { LocalDecl {ty; x; init; pos=$startpos} }
+| VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
+  { LocalDecl {ty_opt; x; init; pos=$startpos} }
 
 %inline localdecls:
 |                        { [] }

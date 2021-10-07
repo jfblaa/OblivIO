@@ -1,0 +1,25 @@
+ALICE
+
+channel DE_LUXES_UNIQUES/ORDER : (int@{H}*int@{H})@{H};
+
+var my_id : int@{H} = 1; // Alice
+var item_id : int@{H} = 3; // Handbag
+
+START(x : int@{}) {
+    var order = (item_id,my_id);
+
+    ;;
+
+    send(DE_LUXES_UNIQUES/ORDER,order);
+}
+
+OK(msg : (int@{H}*(string@{H}*int@{H})@{H})@{H}) {
+    print("Order accepted");
+    print("Order ID", fst msg);
+    print("Item", fst snd msg);
+    print("Price", snd snd msg);
+}
+
+ERROR(code : int@{H}) {
+    print("Bank returned error code", code);
+}

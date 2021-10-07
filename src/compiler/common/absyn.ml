@@ -7,10 +7,10 @@ include Oper
 
 type program = Prog of { node: string; decls: decl list; chs: ch list }
 and decl
-  = VarDecl of { ty: T.ty; x: string; init: exp; pos: pos }
+  = VarDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
   | ChannelDecl of { ty: T.ty; node: string; ch: string; pos: pos }
   | InputDecl of { ty: T.ty; pos: pos }
-and hldecl = LocalDecl of { ty: T.ty; x: string; init: exp; pos: pos }
+and hldecl = LocalDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
 and ch
   = Ch of { ch: string; sender_opt: string option; x: string; ty: T.ty; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; pos: pos}

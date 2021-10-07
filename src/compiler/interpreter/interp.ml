@@ -165,7 +165,7 @@ let rec safeSelect (bit: int) (orig: value) (upd: value) =
           done;
           ArrayVal{length;data}
       end
-    | _ -> raise @@ InterpFatal "safeBind" in
+    | _ -> raise @@ InterpFatal ("safeSelect: " ^ (V.to_string orig) ^  ", " ^ (V.to_string upd)) in
   _S orig upd
 
 let op oper v1 v2 =
@@ -281,8 +281,7 @@ and writevar ctxt updkind upd mode =
             | ASSIGN ->
               if mode = 1 then data.(idx) <- upd
             | BIND ->
-              let orig = lookup table x in
-              data.(idx) <- safeSelect mode orig upd
+              data.(idx) <- safeSelect mode data.(idx) upd
           else 
             (* non-public index, must obliv everything! *)
             let len = Array.length data - 1 in
