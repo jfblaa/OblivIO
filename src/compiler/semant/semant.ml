@@ -15,7 +15,7 @@ type context
   = { gamma : (string, Ty.ty) H.t
     ; delta : (string, Ty.ty) H.t
     ; mutable input: Ty.ty option
-    ; lambda : (string * string, Ty.ty) H.t
+    ; lambda : (string * string, (L.level * Ty.ty)) H.t
     ; hltable : (string, Ty.ty) H.t
     ; err :  Err.errorenv 
     }
@@ -51,8 +51,8 @@ let lookupHandler ({hltable;err;_}) hl pos =
 
 let lookupRemote ({lambda;err;_}) node channel pos = 
   match H.find_opt lambda (node,channel) with
-  | Some ty -> ty
-  | None -> errTy err pos @@ "undeclared channel " ^ node ^ "/" ^ channel
+  | Some lvl_ty -> lvl_ty
+  | None -> L.bottom, errTy err pos @@ "undeclared channel " ^ node ^ "/" ^ channel
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
@@ -264,9 +264,10 @@ let transCmd ({err;_} as ctxt) =
       checkFlow sizelvl L.bottom err pos;
       fromBase @@ InputCmd{var;size}
     | SendCmd {node;channel;exp} ->
-      let chty = lookupRemote ctxt node channel pos in
+      let (chlvl,chty) = lookupRemote ctxt node channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
-      checkAssignable (raiseTo ety pc) chty err pos;
+      checkFlow pc chlvl err pos;
+      checkAssignable ety chty err pos;
       fromBase @@ SendCmd{node;channel;exp=e}
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
@@ -318,9 +319,9 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     | None -> H.add gamma x initty
     end;
     VarDecl{x;ty_opt;init;pos}
-  | A.ChannelDecl {ty;node;ch;pos} ->
-    H.add lambda (node,ch) ty;
-    ChannelDecl{node;ch;ty;pos}
+  | A.ChannelDecl {ty;level;node;ch;pos} ->
+    H.add lambda (node,ch) (level,ty);
+    ChannelDecl{node;ch;ty;level;pos}
   | A.InputDecl{ty;pos} ->
     begin
     match input with
@@ -330,21 +331,21 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     checkString ty err pos;
     InputDecl{ty;pos}
 
-let transCh ({delta;_} as ctxt) (A.Ch{ch;sender_opt;x;ty;decls;prelude;body;pos}) =
+let transCh ({delta;_} as ctxt) (A.Ch{ch;sender_opt;x;ty;level;decls;prelude;body;pos}) =
   H.add delta x ty;
   begin
     match sender_opt with
     | Some sender ->
       let base = T.STRING in
       let level = L.bottom in
-      H. add delta sender (T.Type{base;level})
+      H.add delta sender (T.Type{base;level})
     | None -> ()
   end;
   let decls = List.map (transLocal ctxt) decls in
   let prelude = Option.map (transCmd ctxt L.bottom) prelude in
-  let body = transCmd ctxt (T.level ty) body in
+  let body = transCmd ctxt level body in
   H.clear delta;
-  Ch{ch;sender_opt;x;ty;decls;prelude;body;pos}
+  Ch{ch;sender_opt;x;ty;level;decls;prelude;body;pos}
 
 let transHlDecl {hltable;_} (A.Ch{ch;ty;_}) =
   H.add hltable ch ty

@@ -147,8 +147,8 @@ basetype:
 decl:
 | VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
   { VarDecl {ty_opt; x; init; pos=$startpos} }
-| CHANNEL node=ID DIVIDE ch=ID ty=type_anno SEMICOLON
-  { ChannelDecl {ty; node; ch; pos=$startpos} }
+| CHANNEL node=ID DIVIDE ch=ID AT level=lvl ty=type_anno SEMICOLON
+  { ChannelDecl {ty;level; node; ch; pos=$startpos} }
 | INPUT ty=type_anno SEMICOLON
   { InputDecl {ty; pos=$startpos} }
 
@@ -164,8 +164,8 @@ decl:
 | cmd=cmd_seq SEPARATOR { cmd }
 
 ch:
-| ch=ID LPAREN sender_opt=ioption(terminated(ID,COMMA)) x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
-  { Ch {ch;sender_opt;x;ty;decls;prelude;body;pos=$startpos} }
+| ch=ID AT level=lvl LPAREN sender_opt=ioption(terminated(ID,COMMA)) x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
+  { Ch {ch;sender_opt;x;ty;level;decls;prelude;body;pos=$startpos} }
 
 (* Top-level *)
 program:

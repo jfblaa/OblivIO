@@ -1,18 +1,18 @@
 type pos = Lexing.position 
-type level = Level.level
 
 module T = Types
+module L = Level
 
 include Oper
 
 type program = Prog of { node: string; decls: decl list; chs: ch list }
 and decl
   = VarDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
-  | ChannelDecl of { ty: T.ty; node: string; ch: string; pos: pos }
+  | ChannelDecl of { ty: T.ty; level: L.level; node: string; ch: string; pos: pos }
   | InputDecl of { ty: T.ty; pos: pos }
 and hldecl = LocalDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
 and ch
-  = Ch of { ch: string; sender_opt: string option; x: string; ty: T.ty; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
+  = Ch of { ch: string; sender_opt: string option; x: string; ty: T.ty; level: L.level; decls: hldecl list; prelude: cmd option; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; pos: pos}
 and var_base
   = SimpleVar of string
