@@ -1,9 +1,0 @@
-{Alice}
-
-init send({Greeter},"PING","Hello");
-
-
-
-hn ({Greeter},"PONG",string<m> x) {
-  print("Reply from greeter",x);
-}

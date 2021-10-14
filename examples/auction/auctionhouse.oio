@@ -1,23 +1,23 @@
 AUCTIONHOUSE
 
-channel ALICE/AUCTION_STATUS : int@{H};
-channel BOB/AUCTION_STATUS : int@{H};
-channel CAROL/AUCTION_STATUS : int@{H};
+channel ALICE/AUCTION_STATUS@{H} : int@{H};
+channel BOB/AUCTION_STATUS@{H} : int@{H};
+channel CAROL/AUCTION_STATUS@{H} : int@{H};
 
-channel ALICE/AUCTION_OVER : (string*int)@{H};
-channel BOB/AUCTION_OVER : (string*int)@{H};
-channel CAROL/AUCTION_OVER : (string*int)@{H};
+channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+channel CAROL/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
 var counter : int@{} = 3000;
-var winner : (string*int)@{H} = ("",0);
+var winner : (string@{H}*int@{H})@{H} = ("",0);
 
-START(i : int@{}) {
+START@{} (i : int@{}) {
     send(ALICE/AUCTION_STATUS,0);
     send(BOB/AUCTION_STATUS,0);
     send(CAROL/AUCTION_STATUS,0);
 }
 
-BID(sender, bid : (string*int)@{H}) {
+BID@{H} (sender, bid : (string@{H}*int@{H})@{H}) {
     var status : int@{H} = 0;
     ;;
     counter = counter - 1;

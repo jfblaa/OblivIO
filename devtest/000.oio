@@ -1,7 +1,0 @@
-Alice
-
-CHECK_PWD(string@{H} guess : m) {
-    obliv if guess = password
-    then send(ALICE/TOKEN,token);
-    else send(ALICE/FAIL,"LOGIN FAILED");
-}

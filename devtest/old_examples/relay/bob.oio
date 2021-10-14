@@ -1,5 +1,0 @@
-{Bob}
-
-hn ({Relay},"ALICE",string<m> x) {
-  send({Alice},"GREETING","Howdy!");
-}

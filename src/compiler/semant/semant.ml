@@ -9,8 +9,6 @@ module L = Level
 
 module H = Hashtbl
 
-(* gamma = H.create 1024 *)
-
 type context 
   = { gamma : (string, Ty.ty) H.t
     ; delta : (string, Ty.ty) H.t

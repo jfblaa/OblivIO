@@ -1,8 +1,0 @@
-BOB
-
-channel int@{H} ALICE/PING;
-
-PONG(int@{H} x) {
-  print("Received", x);
-  send(ALICE/PING,x+1);
-}
