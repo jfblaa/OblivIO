@@ -1,0 +1,30 @@
+FIBONNACCI
+
+channel FIBONNACCI/FIB@{} : int@{};
+
+var x : int@{} = 30;
+var result : int@{} = 0;
+var pending : int@{} = 0;
+
+START@{} (i : int@{}) {
+    print("Computing fib of",x);
+    send(FIBONNACCI/FIB,x);
+}
+
+FIB@{} (i : int@{}) {
+    if 2 < i 
+    then {
+        pending = pending + 1;
+        send(FIBONNACCI/FIB,i-1);
+        send(FIBONNACCI/FIB,i-2);
+    }
+    else {
+        result = result + 1;
+        if pending == 0
+        then {
+            print("Result", result);
+            exit();
+        }
+        else pending = pending - 1;
+    }
+}

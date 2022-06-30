@@ -4,6 +4,7 @@ module L = Common.Level
 module A = Common.Tabsyn
 module V = Common.Value
 module Ty = Common.Types
+module Tr = Common.Trace
 
 module H = Hashtbl
 
@@ -13,42 +14,68 @@ open Common.Oper
 type handler_info = {x: string; sender_opt: string option; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
-type sync_queue =
+
+type 'a sync_queue =
   { lock: Mutex.t
-  ; mutable queue: M.message list
+  ; queue: 'a Queue.t
   }
 
 type context = 
   { name: string
-  ; message_queue: sync_queue
+  ; message_queue: M.message sync_queue
   ; mutable input_buffer: char array
   ; mutable mode: int list
   ; memory: (string, value) H.t
   ; store: (string, value) H.t
   ; handlers: (string, handler_info) H.t
-  ; trust_map: (string * string, L.level) H.t
+  ; trust_map: (string * string, L.level * L.level) H.t
   ; server: server_info
+  ; trace: Tr.trace
   }
 
-let enqueue (q: sync_queue) (msg: M.message) =
+let enqueue (msg: 'a) (q: 'a sync_queue) =
   Mutex.lock q.lock;
-  q.queue <- q.queue @ [msg];
+  Queue.add msg q.queue;
   Mutex.unlock q.lock
 
-let dequeue (q: sync_queue) =
+let dequeue (q: 'a sync_queue) =
   Mutex.lock q.lock;
-  let msg_opt =
-    match q.queue with
-    | msg::ls ->
-      q.queue <- ls;
-      Some msg
-    | [] ->
-      None in
+  let msg_opt = Queue.take_opt q.queue in
   Mutex.unlock q.lock;
   msg_opt
 
+let send ctxt msg = 
+  output_value ctxt.server.output msg;
+  flush ctxt.server.output;
+  let time = Sys.time() in
+  Tr.add {time;msg} ctxt.trace
+
 exception InterpFatal of string
 exception NotImplemented of string
+
+let print_trace name trace = 
+  let trace_list = Tr.to_list trace in
+  let h (elm: Tr.trace_element) = 
+    match elm with
+    | {time;msg=M.Relay {sender;channel;_};_} when sender = "OBLIVIO" && channel = "START" -> Some time
+    | _ -> None in
+  let startTime = Option.value (List.find_map h trace_list) ~default:0. in
+  let g acc (elm: Tr.trace_element) =
+    acc + match elm with
+    | {msg=M.Relay {sender;_};_} when sender = name -> 1
+    | _ -> 0 in
+  let p ({time;msg}: Tr.trace_element) =
+    let timeStr = Printf.sprintf "time %f: " (time -. startTime) in
+    print_endline @@ timeStr ^ M.to_string msg in
+  let f acc (elm: Tr.trace_element) =
+    Int64.add acc @@ match elm with
+    | {msg=M.Relay {sender;lvalue=Lval{value;_};_};_} when sender = name -> Int64.of_int @@ Common.Util.size value
+    | _ -> Int64.zero in
+  let nMessages = List.fold_left g 0 trace_list in
+  let nBytes = List.fold_left f Int64.zero trace_list in
+  List.iter p trace_list;
+  print_endline @@ "Total messages sent: " ^ string_of_int nMessages;
+  print_endline @@ "Total bytes: " ^ Int64.to_string nBytes
   
 let lookup m x =
   match H.find_opt m x with
@@ -262,10 +289,8 @@ and writevar ctxt updkind upd mode =
         | [], _ ->
           begin 
           match updkind with
-          | ASSIGN -> H.add table x upd
+          | ASSIGN -> if mode = 1 then H.add table x upd
           | BIND ->
-            if mode = 1
-            then
               let orig = lookup table x in
               H.add table x @@ safeSelect mode orig upd
           end
@@ -343,7 +368,7 @@ and eval ctxt =
       end
     | A.SizeExp exp ->
       let v = _E exp in
-      IntVal (size v)
+      IntVal (Common.Util.size v)
     | A.OpExp {left;oper;right} ->
       let v1 = _E left in
       let v2 = _E right in
@@ -405,22 +430,18 @@ let interpCmd ctxt =
           ctxt.input_buffer <- data
         | _ -> raise @@ InterpFatal "InputCmd"
       end
-      
+    | SendCmd { node; channel; exp } when String.equal node ctxt.name ->
+      let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
+      let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
+      let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
+      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
+      enqueue msg ctxt.message_queue
     | SendCmd { node; channel; exp } ->
-      let level = lookup ctxt.trust_map (node,channel) in
-      let value = eval ctxt exp in
-      let bit = getMode () in
-      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;level;bit;value} in
-      output_value ctxt.server.output msg;
-      flush ctxt.server.output
-    | ReplyCmd { node; channel; exp } ->
-      let receiver = _string @@ lookup ctxt.memory node in
-      let level = lookup ctxt.trust_map (receiver,channel) in
-      let value = eval ctxt exp in
-      let bit = getMode () in
-      let msg = M.Relay{sender=ctxt.name;receiver;channel;level;bit;value} in
-      output_value ctxt.server.output msg;
-      flush ctxt.server.output
+      let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
+      let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
+      let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
+      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
+      send ctxt msg
     | IfCmd { test; thn; els } ->
       begin
       match eval ctxt test with
@@ -461,13 +482,18 @@ let interpCmd ctxt =
         | Some s -> s ^ ": "
         | None -> "" in
       if mode = 1 then print_endline @@ intro ^ V.to_string v;
+    | ExitCmd ->
+      send ctxt (M.Goodbye {sender=ctxt.name});
+      print_trace ctxt.name ctxt.trace;
+      exit 0
       in
   _I
 
-let rec loop ctxt =
+let rec interp_loop ctxt () =
   begin
-  match input_value ctxt.server.input with
-  | M.Relay{sender;channel;bit;value;_} ->
+  match dequeue ctxt.message_queue with
+  | Some (M.Relay{sender;channel;lbit=M.Lbit{bit;_};lvalue=M.Lval{value;_};_} as msg) ->
+    Tr.add {time=Sys.time();msg} ctxt.trace;
     begin
       match H.find_opt ctxt.handlers channel with
       | Some {sender_opt;x;decls;prelude;body} ->
@@ -495,10 +521,18 @@ let rec loop ctxt =
         H.clear ctxt.memory;
       | None -> ()
     end
-  | _ -> ()
+  | Some (Goodbye {sender="OBLIVIO"}) -> exit 1;
+  | _ -> ();
   end;
   T.yield ();
-  loop ctxt
+  interp_loop ctxt ()
+
+let rec input_loop ctxt () =
+  begin
+  enqueue (input_value ctxt.server.input) ctxt.message_queue;
+  end;
+  T.yield ();
+  input_loop ctxt ()
 
 let rec prompt ctxt () =
   let line = read_line () in
@@ -506,6 +540,7 @@ let rec prompt ctxt () =
   let l1 = Array.length arr in
   let l2 = Array.length ctxt.input_buffer in
   Array.blit arr 0 ctxt.input_buffer 0 (min l1 l2);
+  T.yield ();
   prompt ctxt ()
 
 let interp (A.Prog{node;decls;chs}) =
@@ -517,7 +552,7 @@ let interp (A.Prog{node;decls;chs}) =
     { name = node
     ; message_queue = 
       { lock = Mutex.create ()
-      ; queue = []
+      ; queue = Queue.create ()
       }
     ; input_buffer = Array.make 256 '\000'
     ; mode = []
@@ -526,6 +561,7 @@ let interp (A.Prog{node;decls;chs}) =
     ; handlers = H.create 1024
     ; trust_map = H.create 1024
     ; server = {input;output}
+    ; trace = Tr.empty_trace
     } in
   let f (A.Ch{ch;sender_opt;x;decls;prelude;body;_}) =
     H.add ctxt.handlers ch {x;sender_opt;decls;prelude;body} in
@@ -535,16 +571,17 @@ let interp (A.Prog{node;decls;chs}) =
       H.add ctxt.store x i
     | (A.InputDecl _) ->
       ()
-    | (A.ChannelDecl{node;ch;ty;_}) ->
-      let lvl = Ty.level ty in
-      H.add ctxt.trust_map (node,ch) lvl in
+    | (A.ChannelDecl{node;ch;ty;level;_}) ->
+      let tylvl = Ty.level ty in
+      H.add ctxt.trust_map (node,ch) (level,tylvl) in
   
   List.iter f chs;
   List.iter g decls;
 
-  output_value ctxt.server.output (M.Greet {sender=ctxt.name});
-  flush ctxt.server.output;
+  send ctxt (M.Greet {sender=ctxt.name});
 
   let _ = T.create (prompt ctxt) () in
 
-  loop ctxt
+  let _ = T.create (input_loop ctxt) () in
+
+  interp_loop ctxt ()

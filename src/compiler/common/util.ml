@@ -5,3 +5,9 @@ let rec take k xs =
   | k -> match xs with
     | [] -> failwith "take"
     | y::ys -> y :: take (k - 1) ys
+
+let toBytes x = 
+  Marshal.to_bytes x []
+
+let size x =
+  Bytes.length @@ toBytes x

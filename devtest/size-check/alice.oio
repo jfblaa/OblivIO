@@ -1,0 +1,24 @@
+ALICE
+
+channel BOB/HELLO@{H} : int@{H};
+channel ALICE/EXIT@{} : int@{};
+
+var secret : int@{H} = 0;
+
+START@{} (i : int@{}) {
+    oblif secret
+    then send(BOB/HELLO, 0);
+    else skip;
+}
+
+HELLO@{H} (i : string@{H}) {
+    send(ALICE/EXIT,0);
+
+    ;;
+
+    print("Received", i);
+}
+
+EXIT@{} (i : int@{}) {
+    exit();
+}

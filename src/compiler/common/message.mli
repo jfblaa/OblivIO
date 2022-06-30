@@ -2,8 +2,12 @@ module V = Value
 module L = Level
 
 type message
-  = Relay of {sender: string; receiver: string; channel: string; level: L.level; bit: int; value: V.value}
+  = Relay of {sender: string; receiver: string; channel: string; lbit: lbit; lvalue: lvalue}
   | Greet of {sender: string}
-  | Kill
+  | Goodbye of {sender: string}
+and lbit
+  = Lbit of {bit: int; level: L.level}
+and lvalue
+  = Lval of {value: V.value; level: L.level}
 
-val to_string_at_level: message -> L.level -> string
+val to_string: ?lvlOpt:(L.level option) -> message -> string

@@ -65,6 +65,7 @@ rule token = parse
 | "string"            { STRINGTYPE }
 | "input"             { INPUT }
 | "print"             { PRINT }
+| "exit"              { EXIT }
 | "//" nonnewline* '\n' { Lexing.new_line lexbuf; token lexbuf }
 | digit+ as i         { match int_of_string_opt i with
                         | Some i' -> INT i'

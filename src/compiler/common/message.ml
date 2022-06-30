@@ -2,29 +2,40 @@ module V = Value
 module L = Level
 
 type message
-= Relay of {sender: string; receiver: string; channel: string; level: L.level; bit: int; value: V.value}
+  = Relay of {sender: string; receiver: string; channel: string; lbit: lbit; lvalue: lvalue}
   | Greet of {sender: string}
-  | Kill
+  | Goodbye of {sender: string}
+and lbit
+  = Lbit of {bit: int; level: L.level}
+and lvalue
+  = Lval of {value: V.value; level: L.level}
 
-let to_string_at_level msg lvl =
+let bitAux (Lbit{bit;level}) lvlOpt =
+  match lvlOpt with
+  | Some lvl when not (L.flows_to level lvl) -> "#"
+  | _ -> Int.to_string bit
+
+let valueAux (Lval{value;level}) lvlOpt =
+  match lvlOpt with
+  | Some lvl when not (L.flows_to level lvl) -> "###"
+  | _ -> V.to_string value
+
+let to_string ?(lvlOpt=None) msg =
   match msg with
-  | (Relay {sender;receiver;channel;level;bit;value;_}) ->
+  | Relay {sender;receiver;channel;lbit;lvalue=Lval{value;_} as lvalue;_} ->
     String.concat ""
     [ sender
-    ; " -> "
+    ; "->"
     ; receiver
-    ; " : "
+    ; "/"
     ; channel
-    ; " {bit: "
-    ; (if L.flows_to level lvl
-      then Int.to_string bit
-      else "#")
-    ; ", size: "
-    ; Int.to_string @@ V.size value
-    ; ", value: "
-    ; (if L.flows_to level lvl
-      then V.to_string value
-      else "###")
-    ; "}"
+    ; " {"
+    ; bitAux lbit lvlOpt
+    ; ","
+    ; valueAux lvalue lvlOpt
+    ; "} ("
+    ; Int.to_string @@ Util.size value
+    ; " bytes)"
     ]
-  | _ -> "N/A message"
+  | Greet {sender} -> "init: " ^ sender
+  | Goodbye {sender} -> "exit: " ^ sender

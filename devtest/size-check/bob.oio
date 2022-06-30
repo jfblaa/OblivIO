@@ -1,0 +1,25 @@
+BOB
+
+channel ALICE/HELLO@{H} : string@{H};
+channel BOB/EXIT@{} : int@{};
+
+var secret : int@{H} = 1;
+var msg : string@{H} = "";
+
+HELLO@{H} (s : int@{H}) {
+    send(BOB/EXIT,0);
+
+    ;;
+
+    print("Received", s);
+
+    oblif secret
+    then msg ?= "Hi";
+    else msg ?= "Salutations";
+
+    send(ALICE/HELLO, msg);
+}
+
+EXIT@{} (i : int@{}) {
+    exit();
+}

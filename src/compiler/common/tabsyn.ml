@@ -40,9 +40,9 @@ and cmd_base
   | BindCmd of { var: var; exp: exp }
   | InputCmd of { var: var; size: exp }
   | SendCmd of { node: string; channel: string; exp: exp }
-  | ReplyCmd of { node: string; channel: string; exp: exp }
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }
   | PopCmd
   | PrintCmd of { info: string option; exp: exp }
+  | ExitCmd

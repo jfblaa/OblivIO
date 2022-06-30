@@ -13,7 +13,7 @@
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
 %token FST SND PUBLEN SECLEN
-%token COLON SIZE AT PRINT PADTO
+%token COLON SIZE AT PRINT EXIT PADTO
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
@@ -117,6 +117,8 @@ cmd_base:
   { SendCmd{node;channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
+| EXIT LPAREN RPAREN SEMICOLON
+  { ExitCmd }
 
 cmd_seq:
 | c=cmd_base_seq

@@ -5,6 +5,4 @@ type value =
   | PairVal of value * value
   | ArrayVal of {length: int; data: value array}
 
-val size: value -> int
-
 val to_string: value -> string

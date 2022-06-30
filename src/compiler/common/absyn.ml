@@ -43,4 +43,5 @@ and cmd_base
   | WhileCmd of { test: exp; body: cmd }
   | OblivIfCmd of { test: exp; thn: cmd; els: cmd }
   | PrintCmd of { info: string option; exp: exp }
+  | ExitCmd
  

@@ -289,6 +289,9 @@ let transCmd ({err;_} as ctxt) =
     | PrintCmd {info;exp} ->
       let exp = transExp ctxt exp in
       fromBase @@ PrintCmd{info;exp}
+    | ExitCmd -> 
+      checkLowPC pc err pos;
+      fromBase ExitCmd
   in trcmd
 
 let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty_opt;x;init;pos}) =
