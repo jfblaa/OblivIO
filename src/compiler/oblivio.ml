@@ -1,5 +1,9 @@
 exception CompileError
 
+module Tr = Common.Trace
+
+type config = {file:string; unsafe:bool; print_when: Tr.print_when; print_what: Tr.print_what}
+
 let initLexer filename = 
   let input = open_in filename in
   let filebuf = Lexing.from_channel input in
@@ -31,17 +35,17 @@ let semant prog =
   then res
   else raise CompileError
 
-let interp prog =
-  Interpreter.Interp.interp prog
+let interp unsafe print_when print_what prog =
+  Interpreter.Interp.interp ~unsafe print_when print_what prog
   
-let client file =
+let client {file;unsafe;print_when;print_what} =
   let exitCode = ref 0 in
   
   begin 
     try
       parse file
       |> semant
-      |> interp
+      |> interp unsafe print_when print_what
     with
       CompileError -> (exitCode := 1)
   end;
@@ -53,17 +57,31 @@ let src_arg =
   let doc = "Source file $(docv)." in
   Arg.(required & pos 0 (some non_dir_file) None & info [] ~docv:"FILE" ~doc)
 
-let check file =
+let unsafe_arg =
+  let doc = "Disable padding and oblivious branching and run the program in an $(docv) mode." in
+  Arg.(value & flag & info ["u";"unsafe"] ~docv:"UNSAFE" ~doc)
+
+let print_when_arg =
+  let ls = [("onthefly", Tr.ONTHEFLY); ("atexit", Tr.ATEXIT)] in
+  let doc = "Print $(docv) ." in
+  Arg.(value & opt (enum ls) Tr.ATEXIT & info ["p";"print"] ~docv:"TRACE" ~doc)
+
+let print_what_arg =
+  let ls = [("nothing", Tr.NOTHING); ("aggregate", Tr.AGGREGATE); ("full", Tr.FULL)] in
+  let doc = "Print $(docv) ." in
+  Arg.(value & opt (enum ls) Tr.NOTHING & info ["v";"verbosity"] ~docv:"VERBOSE" ~doc)
+
+let check file unsafe print_when print_what =
   if Filename.extension file |> String.equal ".json"
   then Interpreter.Server.start file
-  else client file
+  else client {file;unsafe;print_when;print_what}
 
 let main_t =
-  Term.(const check $ src_arg)
+  Term.(const check $ src_arg $ unsafe_arg $ print_when_arg $ print_what_arg)
 
 let info =
   let doc = "OblivIO interpreter." in
-  Term.info "OblivIO" ~version:"v0.3" ~doc ~exits:Term.default_exits
+  Term.info "OblivIO" ~version:"v0.5" ~doc ~exits:Term.default_exits
 
 let _ = 
   Term.exit @@ Term.eval (main_t,info)

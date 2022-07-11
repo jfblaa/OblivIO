@@ -7,12 +7,6 @@ let checkJsonPath json_file =
   if not (Sys.file_exists json_file) 
   then failwith @@ "cannot find json file " ^ json_file
 
-exception ServerFatal of string
-let lookup m x =
-  match H.find_opt m x with
-  | Some v -> v
-  | None -> raise @@ ServerFatal ("lookup")
-
 let start json_file = 
   checkJsonPath json_file;
   let json = Yojson.Basic.from_file json_file in
@@ -96,7 +90,7 @@ let start json_file =
             String.concat ", " (!clients |> ST.to_seq |> List.of_seq);
         )
       | M.Greet {sender} ->
-        print_endline @@ "Unexpected client " ^ sender ^ ". Connection refused!";
+        print_endline @@ "Unexpected client " ^ sender ^ ". Connection refused";
         let msg = M.Goodbye{sender="OBLIVIO"} in
         output_value out_channel msg;
         flush out_channel;
@@ -112,9 +106,11 @@ let start json_file =
       | M.Relay {receiver;_} as msg ->
         let msgstr = M.to_string ~lvlOpt:(Some advlevel) msg ^ "\n" in
         log msgstr;
-        let ch = lookup routing_table receiver in
-        output_value ch msg;
-        flush ch
+        match H.find_opt routing_table receiver with
+        | Some ch -> 
+          output_value ch msg;
+          flush ch
+        | None -> ()
       end;
       loop () in
     loop () in

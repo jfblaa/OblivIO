@@ -10,4 +10,6 @@ and lbit
 and lvalue
   = Lval of {value: V.value; level: L.level}
 
+val sizeOfMsgValue: message -> int
+
 val to_string: ?lvlOpt:(L.level option) -> message -> string

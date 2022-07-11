@@ -20,9 +20,14 @@ let valueAux (Lval{value;level}) lvlOpt =
   | Some lvl when not (L.flows_to level lvl) -> "###"
   | _ -> V.to_string value
 
+let sizeOfMsgValue = function
+  | Relay {lvalue=Lval{value;_};_} ->
+    Util.size value
+  | _ -> 0
+
 let to_string ?(lvlOpt=None) msg =
   match msg with
-  | Relay {sender;receiver;channel;lbit;lvalue=Lval{value;_} as lvalue;_} ->
+  | Relay {sender;receiver;channel;lbit;lvalue;_} ->
     String.concat ""
     [ sender
     ; "->"
@@ -33,9 +38,7 @@ let to_string ?(lvlOpt=None) msg =
     ; bitAux lbit lvlOpt
     ; ","
     ; valueAux lvalue lvlOpt
-    ; "} ("
-    ; Int.to_string @@ Util.size value
-    ; " bytes)"
+    ; "}"
     ]
   | Greet {sender} -> "init: " ^ sender
   | Goodbye {sender} -> "exit: " ^ sender

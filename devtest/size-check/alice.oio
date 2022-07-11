@@ -3,7 +3,7 @@ ALICE
 channel BOB/HELLO@{H} : int@{H};
 channel ALICE/EXIT@{} : int@{};
 
-var secret : int@{H} = 0;
+var secret : int@{H} = 1;
 
 START@{} (i : int@{}) {
     oblif secret

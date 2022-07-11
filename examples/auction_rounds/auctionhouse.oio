@@ -1,0 +1,41 @@
+AUCTIONHOUSE
+
+channel AUCTIONTIMER/BEGIN@{} : int@{};
+channel AUCTIONTIMER/EXIT@{} : int@{};
+
+channel ALICE/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+
+channel BOB/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+
+var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
+var round_counter : int@{} = 500;
+
+START@{} (i : int@{}) {
+    send(ALICE/AUCTION_STATUS, winning_bid);
+    send(BOB/AUCTION_STATUS, winning_bid);
+    send(AUCTIONTIMER/BEGIN, 1);
+}
+
+BID@{H} (bid : (string@{}*int@{H})@{}) {
+    oblif snd winning_bid < snd bid
+    then winning_bid ?= bid;
+    else skip;
+}
+
+TICK@{} (dmy: int@{}) {
+    if round_counter > 0
+    then {
+        send(ALICE/AUCTION_STATUS, winning_bid);
+        send(BOB/AUCTION_STATUS, winning_bid);
+
+        round_counter = round_counter - 1;
+        send(AUCTIONTIMER/BEGIN, 1);
+    } else {
+        send(ALICE/AUCTION_OVER,winning_bid);
+        send(BOB/AUCTION_OVER,winning_bid);
+        send(AUCTIONTIMER/EXIT, 0);
+        exit();
+    }
+}

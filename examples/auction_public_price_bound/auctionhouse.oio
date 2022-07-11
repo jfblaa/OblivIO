@@ -1,0 +1,52 @@
+AUCTIONHOUSE
+
+channel ALICE/GET_PUBLIC_MAX@{} : int@{};
+channel ALICE/AUCTION_STATUS@{} : (string@{H}*int@{})@{};
+channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+
+channel BOB/AUCTION_STATUS@{} : (string@{H}*int@{})@{};
+channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+
+var asking_price : int@{} = 1;
+var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
+var nReplies : int@{} = 0;
+
+START@{} (i : int@{}) {
+    send(ALICE/AUCTION_STATUS, (fst winning_bid, asking_price));
+}
+
+BID_ALICE@{} (reply : (int@{}*int@{H})@{}) {
+    print("asking_price", asking_price);
+    print("alice says", reply);
+    if fst reply
+    then {
+        oblif snd reply
+        then winning_bid ?= ("Alice", asking_price);
+        else skip;
+        asking_price = asking_price + 1;
+        send(BOB/AUCTION_STATUS, (fst winning_bid, asking_price));
+    }
+    else {
+        send(ALICE/AUCTION_OVER, winning_bid);
+        send(BOB/AUCTION_OVER, winning_bid);
+        exit();
+    }
+}
+
+BID_BOB@{} (reply : (int@{}*int@{H})@{}) {
+    print("asking_price", asking_price);
+    print("bob says", reply);
+    if fst reply
+    then {
+        oblif snd reply
+        then winning_bid ?= ("Bob", asking_price);
+        else skip;
+        asking_price = asking_price + 1;
+        send(ALICE/AUCTION_STATUS, (fst winning_bid, asking_price));
+    }
+    else {
+        send(ALICE/AUCTION_OVER, winning_bid);
+        send(BOB/AUCTION_OVER, winning_bid);
+        exit();
+    }
+}

@@ -14,7 +14,6 @@ open Common.Oper
 type handler_info = {x: string; sender_opt: string option; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
-
 type 'a sync_queue =
   { lock: Mutex.t
   ; queue: 'a Queue.t
@@ -22,6 +21,7 @@ type 'a sync_queue =
 
 type context = 
   { name: string
+  ; unsafe: bool
   ; message_queue: M.message sync_queue
   ; mutable input_buffer: char array
   ; mutable mode: int list
@@ -47,35 +47,13 @@ let dequeue (q: 'a sync_queue) =
 let send ctxt msg = 
   output_value ctxt.server.output msg;
   flush ctxt.server.output;
-  let time = Sys.time() in
-  Tr.add {time;msg} ctxt.trace
+  match msg with
+  | M.Relay _ ->
+    Tr.add_send (Sys.time()) msg ctxt.trace
+  | _ -> ()
 
 exception InterpFatal of string
 exception NotImplemented of string
-
-let print_trace name trace = 
-  let trace_list = Tr.to_list trace in
-  let h (elm: Tr.trace_element) = 
-    match elm with
-    | {time;msg=M.Relay {sender;channel;_};_} when sender = "OBLIVIO" && channel = "START" -> Some time
-    | _ -> None in
-  let startTime = Option.value (List.find_map h trace_list) ~default:0. in
-  let g acc (elm: Tr.trace_element) =
-    acc + match elm with
-    | {msg=M.Relay {sender;_};_} when sender = name -> 1
-    | _ -> 0 in
-  let p ({time;msg}: Tr.trace_element) =
-    let timeStr = Printf.sprintf "time %f: " (time -. startTime) in
-    print_endline @@ timeStr ^ M.to_string msg in
-  let f acc (elm: Tr.trace_element) =
-    Int64.add acc @@ match elm with
-    | {msg=M.Relay {sender;lvalue=Lval{value;_};_};_} when sender = name -> Int64.of_int @@ Common.Util.size value
-    | _ -> Int64.zero in
-  let nMessages = List.fold_left g 0 trace_list in
-  let nBytes = List.fold_left f Int64.zero trace_list in
-  List.iter p trace_list;
-  print_endline @@ "Total messages sent: " ^ string_of_int nMessages;
-  print_endline @@ "Total bytes: " ^ Int64.to_string nBytes
   
 let lookup m x =
   match H.find_opt m x with
@@ -145,6 +123,36 @@ let rec safeEq v1 v2 =
     Bool.to_int (!mismatch = 0)
   | _ -> raise @@ NotImplemented "safeEq"
 
+exception Unequal
+let rec unsafeEq v1 v2 =
+  match v1, v2 with
+  | IntVal a, IntVal b -> 
+    Bool.to_int @@ (a = b)
+  | StringVal{length=l1;data=d1}, StringVal{length=l2;data=d2} ->
+    begin
+    try
+      if l1 <> l2 then raise Unequal;
+      for i = 0 to (min l1 l2)-1 do
+        if d1.(i) <> d2.(i) then raise Unequal
+      done;
+      1
+    with Unequal -> 0
+    end
+  | PairVal(a1,a2), PairVal (b1,b2) ->
+    unsafeEq a1 b1 * safeEq a2 b2
+  | ArrayVal{length=l1;data=d1}, ArrayVal{length=l2;data=d2} ->
+    begin
+    try
+      if l1 <> l2 then raise Unequal;
+      for i = 0 to (min l1 l2)-1 do
+        let i = unsafeEq d1.(i) d2.(i) in
+        if (i = 0) then raise Unequal
+      done;
+      1
+    with Unequal -> 0
+    end
+  | _ -> raise @@ NotImplemented "unsafeEq"
+
 let rec safeSelect (bit: int) (orig: value) (upd: value) =
   let rec _S orig upd =
     match orig, upd with
@@ -208,16 +216,16 @@ let op oper v1 v2 =
   | LeOp, IntVal a, IntVal b ->
     IntVal (Bool.to_int @@ (a - b <= 0))
   | GtOp, IntVal a, IntVal b ->
-    IntVal (Bool.to_int @@ (b - a < 0))
+    IntVal (Bool.to_int @@ (a - b > 0))
   | GeOp, IntVal a, IntVal b ->
-    IntVal (Bool.to_int @@ (b - a <= 0))
+    IntVal (Bool.to_int @@ (a - b >= 0))
   | AndOp, IntVal a, IntVal b ->
-    let ai = (Bool.to_int @@ (a > 0)) in
-    let bi = (Bool.to_int @@ (b > 0)) in
+    let ai = (Bool.to_int @@ (a <> 0)) in
+    let bi = (Bool.to_int @@ (b <> 0)) in
     IntVal (Bool.to_int @@ (ai land bi > 0))
   | OrOp, IntVal a, IntVal b ->
-    let ai = (Bool.to_int @@ (a > 0)) in
-    let bi = (Bool.to_int @@ (b > 0)) in
+    let ai = (Bool.to_int @@ (a <> 0)) in
+    let bi = (Bool.to_int @@ (b <> 0)) in
     IntVal (Bool.to_int @@ (ai lor bi > 0))
   | PlusOp, IntVal a, IntVal b ->
     IntVal (a+b)
@@ -233,6 +241,43 @@ let op oper v1 v2 =
   | PadOp, s, IntVal length ->
     let data = Array.make length '\000' in
     safeSelect 0 s (StringVal{length;data})
+  | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
+
+let op_unsafe oper v1 v2 =
+  match oper,v1,v2 with
+  (* POLY *)
+  | EqOp, _, _ ->
+    IntVal (unsafeEq v1 v2)
+  | NeqOp, _, _ ->
+    IntVal ((unsafeEq v1 v2) lxor 1)
+  (* INT *)
+  | LtOp, IntVal a, IntVal b ->
+    IntVal (Bool.to_int @@ (a < b))
+  | LeOp, IntVal a, IntVal b ->
+    IntVal (Bool.to_int @@ (a <= b))
+  | GtOp, IntVal a, IntVal b ->
+    IntVal (Bool.to_int @@ (a > b))
+  | GeOp, IntVal a, IntVal b ->
+    IntVal (Bool.to_int @@ (a >= b))
+  | AndOp, IntVal a, IntVal b ->
+    IntVal (Bool.to_int @@ (a <> 0 && b <> 0))
+  | OrOp, IntVal a, IntVal b ->
+    IntVal (Bool.to_int @@ (a <> 0 || b <> 0))
+  | PlusOp, IntVal a, IntVal b ->
+    IntVal (a+b)
+  | MinusOp, IntVal a, IntVal b ->
+    IntVal (a-b)
+  | TimesOp, IntVal a, IntVal b ->
+    IntVal (a*b)
+  | DivideOp, IntVal a, IntVal b ->
+    IntVal (a / b)
+  (* STRING *)
+  | CaretOp, StringVal {length=l1;data=d1}, StringVal {length=l2;data=d2} ->
+    let d1' = Array.sub d1 0 l1 in
+    let d2' = Array.sub d2 0 l2 in
+    StringVal {length=l1+l2; data=Array.append d1' d2'}
+  | PadOp, s, IntVal _ ->
+      s
   | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
 
 type update = ASSIGN | BIND
@@ -253,7 +298,7 @@ let rec readvar ctxt =
           let idx = cnd1 * i in
           let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
           let res =
-            if L.flows_to lvl L.bottom
+            if L.flows_to lvl L.bottom || ctxt.unsafe
             then f tl data.(idx) (* public index, no problem! *)
             else 
               (* non-public index, must obliv everything! *)
@@ -288,11 +333,11 @@ and writevar ctxt updkind upd mode =
         match path, v with
         | [], _ ->
           begin 
-          match updkind with
-          | ASSIGN -> if mode = 1 then H.add table x upd
-          | BIND ->
-              let orig = lookup table x in
-              H.add table x @@ safeSelect mode orig upd
+          match updkind, ctxt.unsafe with
+          | BIND, false ->
+            let orig = lookup table x in
+            H.add table x @@ safeSelect mode orig upd
+          | _ -> if mode = 1 then H.add table x upd
           end
         | [(i,lvl)], ArrayVal{length;data} ->
           let maxidx = length -1 in
@@ -300,13 +345,13 @@ and writevar ctxt updkind upd mode =
           let cnd2 = Bool.to_int(i > maxidx) in
           let idx = cnd1 * i in
           let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
-          if L.flows_to lvl L.bottom
+          if L.flows_to lvl L.bottom || ctxt.unsafe
           then (* public index, no problem! *)
-            match updkind with
-            | ASSIGN ->
-              if mode = 1 then data.(idx) <- upd
-            | BIND ->
+            match updkind, ctxt.unsafe with
+            | BIND, false ->
               data.(idx) <- safeSelect mode data.(idx) upd
+            | _ ->
+              if mode = 1 then data.(idx) <- upd;
           else 
             (* non-public index, must obliv everything! *)
             let len = Array.length data - 1 in
@@ -320,7 +365,7 @@ and writevar ctxt updkind upd mode =
           let cnd2 = Bool.to_int(i > maxidx) in
           let idx = cnd1 * i in
           let idx = ((cnd2 lxor 1) * idx) lor (cnd2 * maxidx) in
-          if L.flows_to lvl L.bottom
+          if L.flows_to lvl L.bottom || ctxt.unsafe
           then f tl data.(idx) mode (* public index, no problem! *)
           else 
             (* non-public index, must obliv everything! *)
@@ -361,9 +406,9 @@ and eval ctxt =
       begin
         match readvar ctxt var with
         | StringVal{length;data} ->
-          if public then IntVal (Array.length data) else IntVal length
+          if public || ctxt.unsafe then IntVal (Array.length data) else IntVal length
         | ArrayVal{length;data} ->
-          if public then IntVal (Array.length data) else IntVal length
+          if public || ctxt.unsafe then IntVal (Array.length data) else IntVal length
         | _ -> raise @@ InterpFatal "LengthExp"
       end
     | A.SizeExp exp ->
@@ -372,8 +417,9 @@ and eval ctxt =
     | A.OpExp {left;oper;right} ->
       let v1 = _E left in
       let v2 = _E right in
-      let v = op oper v1 v2 in
-      v
+      if ctxt.unsafe
+      then op_unsafe oper v1 v2
+      else op oper v1 v2
     | A.PairExp (a,b) ->
       PairVal (_E a,_E b)
     | ArrayExp arr ->
@@ -384,12 +430,14 @@ and eval ctxt =
       ArrayVal {length;data}
   in _E
 
+exception Exit
+
 let interpCmd ctxt =
   let getMode () =
     match ctxt.mode with
     | m::_ -> m
     | [] -> raise @@ InterpFatal "getMode: stack empty" in
-  let rec _I (A.Cmd{cmd_base;pos}) =
+  let rec _I (A.Cmd{cmd_base;pos} as cmd) =
     match cmd_base with
     | SkipCmd -> ()
     | SeqCmd {c1;c2} ->
@@ -404,9 +452,36 @@ let interpCmd ctxt =
           let v = eval ctxt exp in
           writevar ctxt ASSIGN v 1 var
       end
+    | BindCmd { var; exp } when ctxt.unsafe ->
+      let Var{loc;_} = var in
+      begin 
+        match loc, getMode () with
+        | STORE, 0 -> ()
+        | _ ->
+          let v = eval ctxt exp in
+          writevar ctxt ASSIGN v 1 var
+      end
     | BindCmd { var; exp } ->
       let v = eval ctxt exp in
-      writevar ctxt BIND v (getMode ()) var
+      writevar ctxt BIND v (getMode ()) var;
+    | InputCmd { var; _ } when ctxt.unsafe ->
+      let arr = ctxt.input_buffer in
+      let len = Array.length arr in
+      let blank = Array.make len '\000' in
+      let j = ref 0 in
+      if (getMode () = 1) then (
+        begin
+        try 
+          for i = 0 to len-1 do
+            let c = arr.(i) in
+            if c <> '\000'
+            then Array.set blank i c
+            else raise Unequal
+          done;
+        with Unequal -> ();
+        end;
+        writevar ctxt ASSIGN (StringVal{length=(!j);data=blank}) (getMode ()) var;
+      );
     | InputCmd { var; size; _ } ->
       let ne = _int @@ eval ctxt size in
       let max_len = Array.length ctxt.input_buffer in
@@ -430,12 +505,21 @@ let interpCmd ctxt =
           ctxt.input_buffer <- data
         | _ -> raise @@ InterpFatal "InputCmd"
       end
+    | SendCmd { node; channel; exp } when ctxt.unsafe ->
+      let bit = getMode () in
+      if (bit = 1) then (
+        let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
+        let lbit = M.Lbit{bit; level=bitlvl} in
+        let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
+        let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
+        send ctxt msg
+      )
     | SendCmd { node; channel; exp } when String.equal node ctxt.name ->
       let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
       let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
       let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
       let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
-      enqueue msg ctxt.message_queue
+      enqueue msg ctxt.message_queue;
     | SendCmd { node; channel; exp } ->
       let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
       let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
@@ -449,13 +533,17 @@ let interpCmd ctxt =
       | _ -> _I thn
       end
     | WhileCmd { test; body } ->
-      while
-        match eval ctxt test with
-        | IntVal 0 -> false
-        | _ -> true
-      do
-        _I body
-      done
+      begin
+      match eval ctxt test with
+      | IntVal 0 -> ()
+      | _ -> (_I body; _I cmd)
+      end
+    | OblivIfCmd { test; thn; els } when ctxt.unsafe ->
+      begin
+      match eval ctxt test with
+      | IntVal 0 -> _I els
+      | _ -> _I thn
+      end
     | OblivIfCmd { test; thn; els } ->
       let v = eval ctxt test in
       let i =
@@ -465,9 +553,10 @@ let interpCmd ctxt =
       let mode = getMode () in
       ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
       let (~>) cmd_base = A.Cmd{cmd_base;pos} in
-      let _S c1 c2 = A.Cmd{cmd_base=A.SeqCmd{c1;c2};pos} in
-      let cmd' = _S thn @@ _S (~> A.PopCmd) @@ _S els (~> A.PopCmd) in
-      _I cmd'
+      _I thn;
+      _I (~> A.PopCmd);
+      _I els;
+      _I (~> A.PopCmd)
     | PopCmd ->
       begin
       match ctxt.mode with
@@ -484,16 +573,18 @@ let interpCmd ctxt =
       if mode = 1 then print_endline @@ intro ^ V.to_string v;
     | ExitCmd ->
       send ctxt (M.Goodbye {sender=ctxt.name});
-      print_trace ctxt.name ctxt.trace;
-      exit 0
+      raise Exit
       in
   _I
 
 let rec interp_loop ctxt () =
   begin
   match dequeue ctxt.message_queue with
+  | Some (M.Relay{lbit=M.Lbit{bit=0;_};_}) when ctxt.unsafe ->
+    ()
   | Some (M.Relay{sender;channel;lbit=M.Lbit{bit;_};lvalue=M.Lval{value;_};_} as msg) ->
-    Tr.add {time=Sys.time();msg} ctxt.trace;
+    if (not @@ String.equal sender ctxt.name)
+    then Tr.add_receive (Sys.time()) msg ctxt.trace;
     begin
       match H.find_opt ctxt.handlers channel with
       | Some {sender_opt;x;decls;prelude;body} ->
@@ -543,13 +634,15 @@ let rec prompt ctxt () =
   T.yield ();
   prompt ctxt ()
 
-let interp (A.Prog{node;decls;chs}) =
+
+let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;chs}) =
   let inet_addr = Unix.inet_addr_of_string "127.0.0.1" in
   let sockaddr = Unix.ADDR_INET (inet_addr,3050) in
   let input,output = Unix.open_connection sockaddr in
 
   let ctxt =
     { name = node
+    ; unsafe
     ; message_queue = 
       { lock = Mutex.create ()
       ; queue = Queue.create ()
@@ -561,7 +654,7 @@ let interp (A.Prog{node;decls;chs}) =
     ; handlers = H.create 1024
     ; trust_map = H.create 1024
     ; server = {input;output}
-    ; trace = Tr.empty_trace
+    ; trace = Tr.empty_trace print_when print_what
     } in
   let f (A.Ch{ch;sender_opt;x;decls;prelude;body;_}) =
     H.add ctxt.handlers ch {x;sender_opt;decls;prelude;body} in
@@ -584,4 +677,8 @@ let interp (A.Prog{node;decls;chs}) =
 
   let _ = T.create (input_loop ctxt) () in
 
-  interp_loop ctxt ()
+  try
+    interp_loop ctxt ()
+  with Exit ->
+    Tr.terminate ctxt.trace
+  
