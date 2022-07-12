@@ -23,7 +23,7 @@ BID@{H} (bid : (string@{}*int@{H})@{}) {
         then winning_bid ?= bid;
         else skip;
 
-        send(BOB/AUCTION_STATUS, winning_bid);
         send(ALICE/AUCTION_STATUS, winning_bid);
+        send(BOB/AUCTION_STATUS, winning_bid);
     }
 }
