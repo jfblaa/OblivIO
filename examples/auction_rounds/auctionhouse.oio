@@ -3,10 +3,10 @@ AUCTIONHOUSE
 channel AUCTIONTIMER/BEGIN@{} [AUCTIONTIMER/BEGIN;AUCTIONHOUSE/TICK;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;AUCTIONHOUSE/BID;ALICE/AUCTION_OVER;BOB/AUCTION_OVER;AUCTIONTIMER/EXIT] : int@{};
 channel AUCTIONTIMER/EXIT@{} : int@{};
 
-channel ALICE/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+channel ALICE/AUCTION_STATUS@{} : (string@{H}*int@{H})@{H};
 channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
-channel BOB/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+channel BOB/AUCTION_STATUS@{} : (string@{H}*int@{H})@{H};
 channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
 var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
