@@ -1,6 +1,6 @@
 AUCTIONHOUSE
 
-channel AUCTIONTIMER/BEGIN@{} : int@{};
+channel AUCTIONTIMER/BEGIN@{} [AUCTIONTIMER/BEGIN;AUCTIONHOUSE/TICK;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;AUCTIONHOUSE/BID;ALICE/AUCTION_OVER;BOB/AUCTION_OVER;AUCTIONTIMER/EXIT] : int@{};
 channel AUCTIONTIMER/EXIT@{} : int@{};
 
 channel ALICE/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
@@ -12,7 +12,7 @@ channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
 var round_counter : int@{} = 500;
 
-START@{} (i : int@{}) {
+START@{} [AUCTIONTIMER/BEGIN;AUCTIONHOUSE/TICK;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;AUCTIONHOUSE/BID;ALICE/AUCTION_OVER;BOB/AUCTION_OVER;AUCTIONTIMER/EXIT] (i : int@{}) {
     send(ALICE/AUCTION_STATUS, winning_bid);
     send(BOB/AUCTION_STATUS, winning_bid);
     send(AUCTIONTIMER/BEGIN, 1);
@@ -24,7 +24,7 @@ BID@{H} (bid : (string@{}*int@{H})@{}) {
     else skip;
 }
 
-TICK@{} (dmy: int@{}) {
+TICK@{} [AUCTIONTIMER/BEGIN;AUCTIONHOUSE/TICK;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;AUCTIONHOUSE/BID;ALICE/AUCTION_OVER;BOB/AUCTION_OVER;AUCTIONTIMER/EXIT] (dmy: int@{}) {
     if round_counter > 0
     then {
         send(ALICE/AUCTION_STATUS, winning_bid);

@@ -6,16 +6,18 @@ module A = Absyn
 module Err = Errorenv
 module Ty = Types
 module L = Level
+module Ch = Channel
 
 module H = Hashtbl
 
+module ST = Set.Make(Channel)
+
 type context 
-  = { gamma : (string, Ty.ty) H.t
-    ; delta : (string, Ty.ty) H.t
-    ; mutable input: Ty.ty option
-    ; lambda : (string * string, (L.level * Ty.ty)) H.t
-    ; hltable : (string, Ty.ty) H.t
-    ; err :  Err.errorenv 
+  = { gamma: (string, Ty.ty) H.t
+    ; lambda: (Ch.channel, (L.level * Ty.ty * ST.t)) H.t
+    ; delta: (string, Ty.ty) H.t
+    ; mutable input: L.level option
+    ; err:  Err.errorenv 
     }
 ;;
 
@@ -24,6 +26,10 @@ let _bot base =
 
 let raiseTo (T.Type{base;level}) lvl =
   T.Type{base;level=L.lub level lvl}
+
+let errLvl err pos msg =
+  Err.error err pos @@ msg;
+  L.bottom
 
 let errTy err pos msg =
   Err.error err pos @@ msg;
@@ -39,18 +45,13 @@ let lookupVar ({gamma;delta;err;_}) v pos =
 
 let lookupInternal ({input;err;_}) pos = 
     match input with
-    | Some ty -> ty
-    | None -> errTy err pos @@ "undeclared internal channel"
+    | Some level -> level
+    | None -> errLvl err pos @@ "undeclared internal channel"
 
-let lookupHandler ({hltable;err;_}) hl pos = 
-  match H.find_opt hltable hl with
-  | Some ty -> ty
-  | None -> errTy err pos @@ "undeclared handler " ^ hl
-
-let lookupRemote ({lambda;err;_}) node channel pos = 
-  match H.find_opt lambda (node,channel) with
-  | Some lvl_ty -> lvl_ty
-  | None -> L.bottom, errTy err pos @@ "undeclared channel " ^ node ^ "/" ^ channel
+let lookupRemote ({lambda;err;_}) ch pos = 
+  match H.find_opt lambda ch with
+  | Some lvl_ty_cap -> lvl_ty_cap
+  | None -> L.bottom, errTy err pos @@ "undeclared channel " ^ Ch.to_string ch, ST.empty
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
@@ -228,15 +229,17 @@ and transVar ({err;_} as ctxt) =
       end
   in trvar
 
-let transCmd ({err;_} as ctxt) =
-  let rec trcmd pc (A.Cmd{cmd_base;pos}) =
+let transCmd ({err;_} as ctxt) hlchannel declared_reachable =
+  let rec trcmd pc (A.Cmd{cmd_base;pos}): cmd * ST.t =
     let fromBase cmd_base = Cmd{cmd_base;pos} in
     match cmd_base with
-    | SkipCmd -> fromBase SkipCmd
+    | SkipCmd -> fromBase SkipCmd, ST.empty
     | SeqCmd {c1;c2} ->
-      let c1 = trcmd pc c1 in
-      let c2 = trcmd pc c2 in
-      fromBase @@ SeqCmd {c1;c2}
+      let (c1,reach1) = trcmd pc c1 in
+      let (c2,reach2) = trcmd pc c2 in
+      if ST.mem hlchannel @@ ST.inter reach1 reach2
+      then Err.error err pos @@ "handler is recursively reachable in more than one send " ^ Ch.to_string hlchannel;
+      fromBase @@ SeqCmd {c1;c2}, ST.union reach1 reach2
     | AssignCmd {var;exp} ->
       let var,varty,loc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -247,51 +250,62 @@ let transCmd ({err;_} as ctxt) =
           checkLowPC pc err pos
       end;
       checkAssignable ety varty err pos;
-      fromBase @@ AssignCmd{var;exp=e}
+      fromBase @@ AssignCmd{var;exp=e}, ST.empty
     | BindCmd {var;exp} ->
       let var,varty = v_ty @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
       checkAssignable (raiseTo ety pc) varty err pos;
-      fromBase @@ BindCmd{var;exp=e}
+      fromBase @@ BindCmd{var;exp=e}, ST.empty
     | InputCmd {var;size} ->
       let var,varty = v_ty @@ transVar ctxt var in
-      let chty = lookupInternal ctxt pos in
+      let chlvl = lookupInternal ctxt pos in
       let size,sizety,sizelvl = e_ty_lvl @@ transExp ctxt size in
-      checkAssignable (raiseTo chty pc) varty err pos;
+      checkAssignable (Ty.Type{base=Ty.STRING;level=L.lub chlvl pc}) varty err pos;
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
-      fromBase @@ InputCmd{var;size}
-    | SendCmd {node;channel;exp} ->
-      let (chlvl,chty) = lookupRemote ctxt node channel pos in
+      fromBase @@ InputCmd{var;size}, ST.empty
+    | SendCmd {channel;exp} ->
+      let (chlvl,chty,chreachable) = lookupRemote ctxt channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
       checkFlow pc chlvl err pos;
       checkAssignable ety chty err pos;
-      fromBase @@ SendCmd{node;channel;exp=e}
+      if not @@ ST.mem channel declared_reachable
+      then Err.error err pos @@ "cannot send on undeclared channel " ^ Ch.to_string channel;
+      begin
+      match ST.diff chreachable declared_reachable with
+      | s when not (ST.is_empty s) -> Err.error err pos @@ "channels reachable but not declared " ^ String.concat ", " (List.map Ch.to_string @@ List.of_seq @@ ST.to_seq s);
+      | _ -> ()
+      end;
+      fromBase @@ SendCmd{channel;exp=e}, ST.add channel chreachable
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let thn = trcmd pc thn in
-      let els = trcmd pc els in
-      fromBase @@ IfCmd{test;thn;els}
+      let (thn, thnreach) = trcmd pc thn in
+      let (els, elsreach) = trcmd pc els in
+      fromBase @@ IfCmd{test;thn;els}, ST.union thnreach elsreach
     | WhileCmd{test;body} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let body = trcmd pc body in
-      fromBase @@ WhileCmd{test;body}
+      let (body,bodyreach) = trcmd pc body in
+      if ST.mem hlchannel bodyreach
+      then Err.error err pos @@ "handler is recursively reachable in loop  " ^ Ch.to_string hlchannel;
+      fromBase @@ WhileCmd{test;body}, bodyreach
     | OblivIfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
-      let thn = trcmd (L.lub pc testlvl) thn in
-      let els = trcmd (L.lub pc testlvl) els in
-      fromBase @@ OblivIfCmd{test;thn;els}
+      let (thn,thnreach) = trcmd (L.lub pc testlvl) thn in
+      let (els,elsreach) = trcmd (L.lub pc testlvl) els in
+      if ST.mem hlchannel @@ ST.inter thnreach elsreach
+      then Err.error err pos @@ "handler is recursively reachable in both branches of oblif " ^ Ch.to_string hlchannel;
+      fromBase @@ OblivIfCmd{test;thn;els}, ST.union thnreach elsreach
     | PrintCmd {info;exp} ->
       let exp = transExp ctxt exp in
-      fromBase @@ PrintCmd{info;exp}
+      fromBase @@ PrintCmd{info;exp}, ST.empty
     | ExitCmd -> 
       checkLowPC pc err pos;
-      fromBase ExitCmd
+      fromBase ExitCmd, ST.empty
   in trcmd
 
 let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty_opt;x;init;pos}) =
@@ -306,7 +320,7 @@ let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty_opt;x;init;pos}) =
   end;
   LocalDecl{x;ty_opt;init;pos}
 
-let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
+let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
   match dec with
   | A.VarDecl {ty_opt;x;init;pos} ->
     if H.mem gamma x
@@ -320,47 +334,44 @@ let transDecl ({gamma;input;lambda;err;_} as ctxt) dec =
     | None -> H.add gamma x initty
     end;
     VarDecl{x;ty_opt;init;pos}
-  | A.ChannelDecl {ty;level;node;ch;pos} ->
-    H.add lambda (node,ch) (level,ty);
-    ChannelDecl{node;ch;ty;level;pos}
-  | A.InputDecl{ty;pos} ->
+  | A.ChannelDecl {channel;level;reachable;ty;pos} ->
+    H.add lambda channel (level,ty,ST.of_list reachable);
+    ChannelDecl{channel;level;reachable;ty;pos}
+  | A.InputDecl{level;pos} ->
     begin
     match input with
     | Some _ -> Err.error err pos @@ "input channel already declared"
-    | None -> ctxt.input <- Some ty
+    | None -> ctxt.input <- Some level
     end;
-    checkString ty err pos;
-    InputDecl{ty;pos}
+    InputDecl{level;pos}
 
-let transCh ({delta;_} as ctxt) (A.Ch{ch;sender_opt;x;ty;level;decls;prelude;body;pos}) =
-  H.add delta x ty;
-  begin
-    match sender_opt with
-    | Some sender ->
-      let base = T.STRING in
-      let level = L.bottom in
-      H.add delta sender (T.Type{base;level})
-    | None -> ()
-  end;
+let transHl ctxt node (A.Hl{handler;level;reachable;x;ty;decls;prelude;body;pos}) =
+  let hlchannel = Ch.Ch{node;handler} in
+  let declared_reachable = ST.of_list reachable in
+  let ctxt = {ctxt with delta = H.create 1024} in
+  H.add ctxt.delta x ty;
   let decls = List.map (transLocal ctxt) decls in
-  let prelude = Option.map (transCmd ctxt L.bottom) prelude in
-  let body = transCmd ctxt level body in
-  H.clear delta;
-  Ch{ch;sender_opt;x;ty;level;decls;prelude;body;pos}
+  let (body,bodyreach) = transCmd ctxt hlchannel declared_reachable level body in
+  let prelude,reached = match Option.map (transCmd ctxt hlchannel declared_reachable L.bottom) prelude with
+  | Some (p,preach) ->
+    if ST.mem hlchannel @@ ST.inter preach bodyreach
+    then Err.error ctxt.err pos @@ "handler is recursively reachable in both prelude and body " ^ Ch.to_string hlchannel;
+    Some p, ST.union preach bodyreach
+  | None -> None, bodyreach in
+  let unreached = ST.diff declared_reachable reached in
+  if not @@ ST.is_empty unreached
+  then Err.error ctxt.err pos @@ "unreachable channels declared reachable " ^ String.concat ", " (List.map Ch.to_string @@ List.of_seq @@ ST.to_seq unreached);
 
-let transHlDecl {hltable;_} (A.Ch{ch;ty;_}) =
-  H.add hltable ch ty
+  Hl{handler;level;reachable;x;ty;decls;prelude;body;pos}
 
-let transProg (A.Prog{node;decls;chs}) =
+let transProg (A.Prog{node;decls;hls}) =
   let ctxt = 
     { gamma = H.create 1024
-    ; delta = H.create 1024
-    ; input = None
     ; lambda = H.create 1024
-    ; hltable = H.create 1024
+    ; delta = H.create 0
+    ; input = None
     ; err = Err.initial_env
     } in
   let decls = List.map (transDecl ctxt) decls in
-  List.iter (transHlDecl ctxt) chs;
-  let chs = List.map (transCh ctxt) chs in
-  not (Err.any_errors ctxt.err), Prog{node;decls;chs}
+  let hls = List.map (transHl ctxt node) hls in
+  not (Err.any_errors ctxt.err), Prog{node;decls;hls}

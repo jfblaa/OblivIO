@@ -1,8 +1,9 @@
 module V = Value
 module L = Level
+module C = Channel
 
 type message
-  = Relay of {sender: string; receiver: string; channel: string; lbit: lbit; lvalue: lvalue}
+  = Relay of {sender: string; channel: C.channel; lbit: lbit; lvalue: lvalue}
   | Greet of {sender: string}
   | Goodbye of {sender: string}
 and lbit
@@ -27,13 +28,11 @@ let sizeOfMsgValue = function
 
 let to_string ?(lvlOpt=None) msg =
   match msg with
-  | Relay {sender;receiver;channel;lbit;lvalue;_} ->
+  | Relay {sender;channel;lbit;lvalue;_} ->
     String.concat ""
     [ sender
     ; "->"
-    ; receiver
-    ; "/"
-    ; channel
+    ; C.to_string channel
     ; " {"
     ; bitAux lbit lvlOpt
     ; ","

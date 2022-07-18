@@ -2,6 +2,7 @@
   open Common.Absyn
   module L = Common.Level
   module T = Common.Types
+  module Ch = Common.Channel
 %}
 
 %token EOF
@@ -85,7 +86,7 @@ exp_base:
   { LengthExp {public=false;var} }
 | pair=paren(spair(exp,COMMA,exp))
   { PairExp pair }
-| arr=brack(separated_nonempty_list(COMMA,exp))
+| arr=brack(separated_nonempty_list(SEMICOLON,exp))
   { ArrayExp arr }
 
 exp:
@@ -113,8 +114,8 @@ cmd_base:
   { WhileCmd{test; body} }
 | v=var BIND INPUT LPAREN size=exp RPAREN SEMICOLON
   { InputCmd {var=v;size} }
-| SEND LPAREN node=ID DIVIDE channel=ID COMMA exp=exp RPAREN SEMICOLON
-  { SendCmd{node;channel;exp} }
+| SEND LPAREN channel=channel COMMA exp=exp RPAREN SEMICOLON
+  { SendCmd{channel;exp} }
 | PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
   { PrintCmd{info;exp} }
 | EXIT LPAREN RPAREN SEMICOLON
@@ -146,13 +147,23 @@ basetype:
 %inline type_anno:
 | COLON t=type_at_lvl  { t }
 
+channel:
+| node=ID DIVIDE handler=ID
+  { Ch.Ch {node;handler} }
+
+reachable:
+| 
+  { [] }
+| chs=brack(slist(SEMICOLON,channel))
+  { chs }
+
 decl:
 | VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
   { VarDecl {ty_opt; x; init; pos=$startpos} }
-| CHANNEL node=ID DIVIDE ch=ID AT level=lvl ty=type_anno SEMICOLON
-  { ChannelDecl {ty;level; node; ch; pos=$startpos} }
-| INPUT ty=type_anno SEMICOLON
-  { InputDecl {ty; pos=$startpos} }
+| CHANNEL channel=channel AT level=lvl reachable=reachable ty=type_anno SEMICOLON
+  { ChannelDecl {ty; level; channel; reachable; pos=$startpos} }
+| INPUT AT level=lvl SEMICOLON
+  { InputDecl {level; pos=$startpos} }
 
 %inline localdecl:
 | VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
@@ -165,11 +176,11 @@ decl:
 %inline prelude:
 | cmd=cmd_seq SEPARATOR { cmd }
 
-ch:
-| ch=ID AT level=lvl LPAREN sender_opt=ioption(terminated(ID,COMMA)) x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
-  { Ch {ch;sender_opt;x;ty;level;decls;prelude;body;pos=$startpos} }
+handler:
+| handler=ID AT level=lvl reachable=reachable LPAREN x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
+  { Hl {handler;reachable;x;ty;level;decls;prelude;body;pos=$startpos} }
 
 (* Top-level *)
 program:
-| node=ID decls=decl* chs=ch* EOF
-  { Prog {node;decls;chs} }
+| node=ID decls=decl* hls=handler* EOF
+  { Prog {node;decls;hls} }

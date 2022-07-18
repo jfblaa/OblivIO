@@ -5,13 +5,14 @@ module A = Common.Tabsyn
 module V = Common.Value
 module Ty = Common.Types
 module Tr = Common.Trace
+module C = Common.Channel
 
 module H = Hashtbl
 
 open Common.Value
 open Common.Oper
 
-type handler_info = {x: string; sender_opt: string option; decls: A.hldecl list; prelude: A.cmd option; body: A.cmd}
+type handler_info = {x: string; decls: A.ldecl list; prelude: A.cmd option; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
 type 'a sync_queue =
@@ -28,7 +29,7 @@ type context =
   ; memory: (string, value) H.t
   ; store: (string, value) H.t
   ; handlers: (string, handler_info) H.t
-  ; trust_map: (string * string, L.level * L.level) H.t
+  ; trust_map: (C.channel, L.level * L.level) H.t
   ; server: server_info
   ; trace: Tr.trace
   }
@@ -505,26 +506,20 @@ let interpCmd ctxt =
           ctxt.input_buffer <- data
         | _ -> raise @@ InterpFatal "InputCmd"
       end
-    | SendCmd { node; channel; exp } when ctxt.unsafe ->
+    | SendCmd { channel; exp } when ctxt.unsafe ->
       let bit = getMode () in
       if (bit = 1) then (
-        let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
+        let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
         let lbit = M.Lbit{bit; level=bitlvl} in
         let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
-        let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
+        let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
         send ctxt msg
       )
-    | SendCmd { node; channel; exp } when String.equal node ctxt.name ->
-      let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
+    | SendCmd { channel; exp } ->
+      let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
       let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
       let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
-      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
-      enqueue msg ctxt.message_queue;
-    | SendCmd { node; channel; exp } ->
-      let (bitlvl,valuelvl) = lookup ctxt.trust_map (node,channel) in
-      let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
-      let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
-      let msg = M.Relay{sender=ctxt.name;receiver=node;channel;lbit;lvalue} in
+      let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
       send ctxt msg
     | IfCmd { test; thn; els } ->
       begin
@@ -582,20 +577,12 @@ let rec interp_loop ctxt () =
   match dequeue ctxt.message_queue with
   | Some (M.Relay{lbit=M.Lbit{bit=0;_};_}) when ctxt.unsafe ->
     ()
-  | Some (M.Relay{sender;channel;lbit=M.Lbit{bit;_};lvalue=M.Lval{value;_};_} as msg) ->
+  | Some (M.Relay{sender;channel=C.Ch{handler;_};lbit=M.Lbit{bit;_};lvalue=M.Lval{value;_};_} as msg) ->
     if (not @@ String.equal sender ctxt.name)
     then Tr.add_receive (Sys.time()) msg ctxt.trace;
     begin
-      match H.find_opt ctxt.handlers channel with
-      | Some {sender_opt;x;decls;prelude;body} ->
-        begin
-          match sender_opt with
-          | Some s ->
-            let length = String.length sender in
-            let data = sender |> String.to_seq |> Array.of_seq in
-            H.add ctxt.memory s (StringVal{length;data})
-          | None -> ()
-        end;
+      match H.find_opt ctxt.handlers handler with
+      | Some {x;decls;prelude;body} ->
         H.add ctxt.memory x value;
         let f (A.LocalDecl{x;init;_}) =
           H.add ctxt.memory x @@ eval ctxt init in
@@ -635,7 +622,7 @@ let rec prompt ctxt () =
   prompt ctxt ()
 
 
-let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;chs}) =
+let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;hls}) =
   let inet_addr = Unix.inet_addr_of_string "127.0.0.1" in
   let sockaddr = Unix.ADDR_INET (inet_addr,3050) in
   let input,output = Unix.open_connection sockaddr in
@@ -656,19 +643,19 @@ let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;chs}) =
     ; server = {input;output}
     ; trace = Tr.empty_trace print_when print_what
     } in
-  let f (A.Ch{ch;sender_opt;x;decls;prelude;body;_}) =
-    H.add ctxt.handlers ch {x;sender_opt;decls;prelude;body} in
+  let f (A.Hl{handler;x;decls;prelude;body;_}) =
+    H.add ctxt.handlers handler {x;decls;prelude;body} in
   let g = function
     | (A.VarDecl{x;init;_}) ->
       let i = eval ctxt init in
       H.add ctxt.store x i
     | (A.InputDecl _) ->
       ()
-    | (A.ChannelDecl{node;ch;ty;level;_}) ->
+    | (A.ChannelDecl{channel;ty;level;_}) ->
       let tylvl = Ty.level ty in
-      H.add ctxt.trust_map (node,ch) (level,tylvl) in
+      H.add ctxt.trust_map channel (level,tylvl) in
   
-  List.iter f chs;
+  List.iter f hls;
   List.iter g decls;
 
   send ctxt (M.Greet {sender=ctxt.name});

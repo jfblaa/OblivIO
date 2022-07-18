@@ -1,8 +1,9 @@
 module V = Value
 module L = Level
+module C = Channel
 
 type message
-  = Relay of {sender: string; receiver: string; channel: string; lbit: lbit; lvalue: lvalue}
+  = Relay of {sender: string; channel: C.channel; lbit: lbit; lvalue: lvalue}
   | Greet of {sender: string}
   | Goodbye of {sender: string}
 and lbit
