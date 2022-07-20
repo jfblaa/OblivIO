@@ -13,18 +13,21 @@ and lvalue
 
 let bitAux (Lbit{bit;level}) lvlOpt =
   match lvlOpt with
-  | Some lvl when not (L.flows_to level lvl) -> "#"
+  | Some lvl when not (L.flows_to level lvl) -> "?"
   | _ -> Int.to_string bit
 
 let valueAux (Lval{value;level}) lvlOpt =
   match lvlOpt with
-  | Some lvl when not (L.flows_to level lvl) -> "###"
+  | Some lvl when not (L.flows_to level lvl) -> "?"
   | _ -> V.to_string value
 
 let sizeOfMsgValue = function
   | Relay {lvalue=Lval{value;_};_} ->
     Util.size value
   | _ -> 0
+
+let size (Lval{value;_}) =
+  V.size value
 
 let to_string ?(lvlOpt=None) msg =
   match msg with
@@ -37,7 +40,9 @@ let to_string ?(lvlOpt=None) msg =
     ; bitAux lbit lvlOpt
     ; ","
     ; valueAux lvalue lvlOpt
-    ; "}"
+    ; "} ("
+    ; Int.to_string @@ size lvalue
+    ; " bytes)"
     ]
   | Greet {sender} -> "init: " ^ sender
   | Goodbye {sender} -> "exit: " ^ sender

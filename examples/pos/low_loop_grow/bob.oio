@@ -1,0 +1,19 @@
+BOB
+
+channel ALICE/A1@{} : int@{H};
+channel ALICE/A2@{} : int@{H};
+
+var bobs_secret : int@{H} = 0;
+
+START@{} (i : int@{}) {
+    send(ALICE/A1, bobs_secret);
+}
+
+B1@{} (secret : int@{H}) {
+    send(ALICE/A1, secret);
+}
+
+B2@{} (secret : int@{H}) {
+    print("BOB/B2 received", secret);
+    send(ALICE/A2, secret);
+}

@@ -1,0 +1,37 @@
+BOB
+
+channel 
+    #reach [ALICE/A1;BOB/B1;ALICE/A2;BOB/B2]
+    #cost 2
+    #overhead 1
+    ALICE/A1@{H} : int@{H};
+
+channel
+    #reach [ALICE/A2;BOB/B2]
+    #cost 1
+    ALICE/A2@{H} : int@{H};
+
+var bobs_secret : int@{H} = 0;
+
+#reach [ALICE/A1;BOB/B1;ALICE/A2;BOB/B2]
+#cost 2
+#overhead 1
+START@{} (i : int@{}) {
+    send(ALICE/A1, bobs_secret);
+}
+
+#reach [ALICE/A1;BOB/B1;ALICE/A2;BOB/B2]
+#cost 1
+#overhead 1
+B1@{H} (secret : int@{H}) {
+    oblif 0
+    then send(ALICE/A1, secret);
+    else skip;
+}
+
+#reach [ALICE/A2;BOB/B2]
+#cost 1
+B2@{H} (secret : int@{H}) {
+    print("BOB/B2 received", secret);
+    send(ALICE/A2, secret);
+}

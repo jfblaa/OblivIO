@@ -18,6 +18,7 @@
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
+%token REACH COST OVERHEAD
 
 %left OR
 %left AND
@@ -151,17 +152,19 @@ channel:
 | node=ID DIVIDE handler=ID
   { Ch.Ch {node;handler} }
 
-reachable:
-| 
-  { [] }
-| chs=brack(slist(SEMICOLON,channel))
-  { chs }
+effect:
+| REACH channels=brack(separated_nonempty_list(SEMICOLON,channel))
+  { Reach {channels;pos=$startpos} }
+| COST cost=INT
+  { Cost {cost;pos=$startpos} }
+| OVERHEAD overhead=INT
+  { Overhead {overhead;pos=$startpos} }
 
 decl:
 | VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
   { VarDecl {ty_opt; x; init; pos=$startpos} }
-| CHANNEL channel=channel AT level=lvl reachable=reachable ty=type_anno SEMICOLON
-  { ChannelDecl {ty; level; channel; reachable; pos=$startpos} }
+| CHANNEL effects=effect* channel=channel AT level=lvl ty=type_anno SEMICOLON
+  { ChannelDecl {ty; level; channel; effects; pos=$startpos(channel)} }
 | INPUT AT level=lvl SEMICOLON
   { InputDecl {level; pos=$startpos} }
 
@@ -177,8 +180,8 @@ decl:
 | cmd=cmd_seq SEPARATOR { cmd }
 
 handler:
-| handler=ID AT level=lvl reachable=reachable LPAREN x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
-  { Hl {handler;reachable;x;ty;level;decls;prelude;body;pos=$startpos} }
+| effects=effect* handler=ID AT level=lvl LPAREN x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
+  { Hl {handler;effects;x;ty;level;decls;prelude;body;pos=$startpos(handler)} }
 
 (* Top-level *)
 program:

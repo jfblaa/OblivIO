@@ -1,0 +1,39 @@
+AUCTIONHOUSE
+
+channel 
+    #reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
+    ALICE/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+channel ALICE/AUCTION_OVER@{H} : (string@{H}*int@{H})@{H};
+
+channel
+    #reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
+    BOB/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+channel BOB/AUCTION_OVER@{H} : (string@{H}*int@{H})@{H};
+
+var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
+
+#reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
+#cost 2
+#overhead 0
+START@{} (i : int@{}) {
+    send(ALICE/AUCTION_STATUS, winning_bid);
+    send(BOB/AUCTION_STATUS, winning_bid);
+}
+
+#reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
+#cost 2
+#overhead 2
+BID@{H} (bid : (string@{}*int@{H})@{}) {
+    oblif snd bid == -1
+    then {
+        send(ALICE/AUCTION_OVER, winning_bid);
+        send(BOB/AUCTION_OVER, winning_bid);
+    } else {
+        oblif snd winning_bid < snd bid
+        then winning_bid ?= bid;
+        else skip;
+
+        send(ALICE/AUCTION_STATUS, winning_bid);
+        send(BOB/AUCTION_STATUS, winning_bid);
+    }
+}

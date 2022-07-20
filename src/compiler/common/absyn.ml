@@ -3,17 +3,20 @@ type pos = Lexing.position
 module T = Types
 module L = Level
 module Ch = Channel
-
 include Oper
 
 type program = Prog of { node: string; decls: decl list; hls: hl list }
+and effect
+  = Reach of {channels: Ch.channel list; pos: pos}
+  | Cost of {cost: int; pos: pos}
+  | Overhead of {overhead: int; pos: pos}
 and decl
   = VarDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
-  | ChannelDecl of { channel: Ch.channel; level: L.level; reachable: Ch.channel list; ty: T.ty; pos: pos }
+  | ChannelDecl of { channel: Ch.channel; level: L.level; effects: effect list; ty: T.ty; pos: pos }
   | InputDecl of { level: L.level; pos: pos }
 and ldecl = LocalDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
 and hl
-  = Hl of { handler: string; level: L.level; reachable: Ch.channel list; x: string; ty: T.ty; decls: ldecl list; prelude: cmd option; body: cmd; pos: pos }
+  = Hl of { handler: string; level: L.level; effects: effect list; x: string; ty: T.ty; decls: ldecl list; prelude: cmd option; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; pos: pos}
 and var_base
   = SimpleVar of string

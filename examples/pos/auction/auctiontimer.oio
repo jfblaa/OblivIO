@@ -1,0 +1,18 @@
+AUCTIONTIMER
+
+channel AUCTIONHOUSE/TICK@{} : int@{};
+
+BEGIN@{} (i : int@{}) {
+    var c : int@{} = i * 2000;
+
+    ;;
+
+    while (c > 0) do {
+        c = c - 1;
+    }
+    send(AUCTIONHOUSE/TICK, 0);
+}
+
+EXIT@{} (i : int@{}) {
+    exit();
+}

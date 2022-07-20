@@ -1,11 +1,14 @@
 ALICE
 
-channel AUCTIONHOUSE/BID@{H} [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER] : (string@{}*int@{H})@{};
+channel
+    #reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
+    AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{};
 
 var bid : int@{H} = 0;
 var max_bid : int@{H} = 432;
 
-AUCTION_STATUS@{H} [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER] (winning_bid : (string@{H}*int@{H})@{H}) {
+#reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
+AUCTION_STATUS@{H} (winning_bid : (string@{H}*int@{H})@{H}) {
     oblif fst winning_bid != "Alice"
     then
         oblif snd winning_bid < max_bid 

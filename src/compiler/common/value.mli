@@ -6,3 +6,5 @@ type value =
   | ArrayVal of {length: int; data: value array}
 
 val to_string: value -> string
+
+val size: value -> int

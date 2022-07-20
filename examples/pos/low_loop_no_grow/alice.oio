@@ -1,0 +1,8 @@
+ALICE
+
+channel BOB/B2@{} : int@{H};
+
+A2@{} (secret : int@{H}) {
+    print("ALICE/A2 received", secret);
+    send(BOB/B2, secret+1);
+}

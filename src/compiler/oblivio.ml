@@ -81,7 +81,7 @@ let main_t =
 
 let info =
   let doc = "OblivIO interpreter." in
-  Term.info "OblivIO" ~version:"v0.5" ~doc ~exits:Term.default_exits
+  Cmd.info "OblivIO" ~version:"v0.5" ~doc ~exits:Cmd.Exit.defaults
 
 let _ = 
-  Term.exit @@ Term.eval (main_t,info)
+  Cmd.v info main_t |> Cmd.eval |> exit

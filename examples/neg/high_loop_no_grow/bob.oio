@@ -1,0 +1,21 @@
+BOB
+
+channel
+    #reach [ALICE/A2;BOB/B2]
+    #cost 1
+    ALICE/A2@{H} : int@{H};
+
+var bobs_secret : int@{H} = 0;
+
+#reach [ALICE/A2;BOB/B2]
+#cost 1
+START@{} (i : int@{}) {
+    send(ALICE/A2, bobs_secret);
+}
+
+#reach [ALICE/A2;BOB/B2]
+#cost 1
+B2@{H} (secret : int@{H}) {
+    print("BOB/B2 received", secret);
+    send(ALICE/A2, secret);
+}
