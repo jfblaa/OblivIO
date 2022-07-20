@@ -8,7 +8,7 @@ var max_bid : int@{H} = 432;
 #cost 0
 #overhead 1
 AUCTION_STATUS@{} (bid : (string@{H}*int@{H})@{H}) {
-    oblif snd bid < max_bid and fst bid != "Alice"
+    oblif snd bid < max_bid && fst bid != "Alice"
     then send(AUCTIONHOUSE/BID, ("Alice", snd bid + 1));
     else skip;
 }

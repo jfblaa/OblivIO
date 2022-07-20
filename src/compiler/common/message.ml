@@ -21,13 +21,14 @@ let valueAux (Lval{value;level}) lvlOpt =
   | Some lvl when not (L.flows_to level lvl) -> "?"
   | _ -> V.to_string value
 
-let sizeOfMsgValue = function
-  | Relay {lvalue=Lval{value;_};_} ->
-    Util.size value
-  | _ -> 0
 
-let size (Lval{value;_}) =
+let sizeOfLvalue (Lval{value;_}) =
   V.size value
+
+let sizeOfMsgValue = function
+  | Relay {lvalue;_} ->
+    sizeOfLvalue lvalue
+  | _ -> 0
 
 let to_string ?(lvlOpt=None) msg =
   match msg with
@@ -41,7 +42,7 @@ let to_string ?(lvlOpt=None) msg =
     ; ","
     ; valueAux lvalue lvlOpt
     ; "} ("
-    ; Int.to_string @@ size lvalue
+    ; Int.to_string @@ sizeOfLvalue lvalue
     ; " bytes)"
     ]
   | Greet {sender} -> "init: " ^ sender

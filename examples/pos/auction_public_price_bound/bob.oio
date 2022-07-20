@@ -6,7 +6,7 @@ var public_max_bid : int@{} = 1000;
 var secret_max_bid : int@{H} = 350;
 
 AUCTION_STATUS@{} (status : (string@{H}*int@{})@{}) {
-    send(AUCTIONHOUSE/BID_BOB, (snd status <= public_max_bid, fst status != "Bob" and snd status <= secret_max_bid));
+    send(AUCTIONHOUSE/BID_BOB, (snd status <= public_max_bid, fst status != "Bob" && snd status <= secret_max_bid));
 }
 
 AUCTION_OVER@{} (winner : (string@{H}*int@{H})@{}) {

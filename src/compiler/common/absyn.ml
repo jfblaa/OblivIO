@@ -14,9 +14,8 @@ and decl
   = VarDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
   | ChannelDecl of { channel: Ch.channel; level: L.level; effects: effect list; ty: T.ty; pos: pos }
   | InputDecl of { level: L.level; pos: pos }
-and ldecl = LocalDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
 and hl
-  = Hl of { handler: string; level: L.level; effects: effect list; x: string; ty: T.ty; decls: ldecl list; prelude: cmd option; body: cmd; pos: pos }
+  = Hl of { handler: string; level: L.level; effects: effect list; x: string; ty: T.ty; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; pos: pos}
 and var_base
   = SimpleVar of string
@@ -30,7 +29,6 @@ and exp_base
   | StringExp of string
   | VarExp of var
   | ProjExp of {proj: proj; exp:exp}
-  | LengthExp of {public: bool; var: var}
   | SizeExp of exp
   | OpExp of { left: exp; oper: oper; right: exp }
   | PairExp of (exp*exp)

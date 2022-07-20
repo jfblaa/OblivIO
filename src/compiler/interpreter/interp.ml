@@ -12,7 +12,7 @@ module H = Hashtbl
 open Common.Value
 open Common.Oper
 
-type handler_info = {x: string; decls: A.ldecl list; prelude: A.cmd option; body: A.cmd}
+type handler_info = {x: string; body: A.cmd}
 type server_info = {input: in_channel; output: out_channel}
 
 type 'a sync_queue =
@@ -239,9 +239,6 @@ let op oper v1 v2 =
   (* STRING *)
   | CaretOp, StringVal {length=l1;data=d1}, StringVal {length=l2;data=d2} ->
     StringVal {length=l1+l2; data=safeConcat d1 d2}
-  | PadOp, s, IntVal length ->
-    let data = Array.make length '\000' in
-    safeSelect 0 s (StringVal{length;data})
   | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
 
 let op_unsafe oper v1 v2 =
@@ -277,8 +274,6 @@ let op_unsafe oper v1 v2 =
     let d1' = Array.sub d1 0 l1 in
     let d2' = Array.sub d2 0 l2 in
     StringVal {length=l1+l2; data=Array.append d1' d2'}
-  | PadOp, s, IntVal _ ->
-      s
   | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
 
 type update = ASSIGN | BIND
@@ -403,18 +398,9 @@ and eval ctxt =
         | A.Snd, PairVal (_,b) -> b
         | _ -> raise @@ InterpFatal __LOC__
       end
-    | A.LengthExp{public;var} ->
-      begin
-        match readvar ctxt var with
-        | StringVal{length;data} ->
-          if public || ctxt.unsafe then IntVal (Array.length data) else IntVal length
-        | ArrayVal{length;data} ->
-          if public || ctxt.unsafe then IntVal (Array.length data) else IntVal length
-        | _ -> raise @@ InterpFatal "LengthExp"
-      end
     | A.SizeExp exp ->
       let v = _E exp in
-      IntVal (Common.Util.size v)
+      IntVal (V.size v)
     | A.OpExp {left;oper;right} ->
       let v1 = _E left in
       let v2 = _E right in
@@ -577,24 +563,16 @@ let rec interp_loop ctxt () =
   match dequeue ctxt.message_queue with
   | Some (M.Relay{lbit=M.Lbit{bit=0;_};_}) when ctxt.unsafe ->
     ()
+  | Some (M.Relay{lbit=M.Lbit{bit=0;level};_}) when L.flows_to level L.bottom  ->
+    ()
   | Some (M.Relay{sender;channel=C.Ch{handler;_};lbit=M.Lbit{bit;_};lvalue=M.Lval{value;_};_} as msg) ->
     if (not @@ String.equal sender ctxt.name)
     then Tr.add_receive (Sys.time()) msg ctxt.trace;
     begin
       match H.find_opt ctxt.handlers handler with
-      | Some {x;decls;prelude;body} ->
+      | Some {x;body} ->
         H.add ctxt.memory x value;
-        let f (A.LocalDecl{x;init;_}) =
-          H.add ctxt.memory x @@ eval ctxt init in
-        List.iter f decls;
-        begin match prelude with
-        | Some prelude ->
-          ctxt.mode <- [1;bit];
-          interpCmd ctxt prelude;
-          interpCmd ctxt (A.Cmd{cmd_base=A.PopCmd;pos=Lexing.dummy_pos});
-        | None ->
-          ctxt.mode <- [bit]
-        end;
+        ctxt.mode <- [bit];
         interpCmd ctxt body;
         H.clear ctxt.memory;
       | None -> ()
@@ -643,8 +621,8 @@ let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;hls}) =
     ; server = {input;output}
     ; trace = Tr.empty_trace print_when print_what
     } in
-  let f (A.Hl{handler;x;decls;prelude;body;_}) =
-    H.add ctxt.handlers handler {x;decls;prelude;body} in
+  let f (A.Hl{handler;x;body;_}) =
+    H.add ctxt.handlers handler {x;body} in
   let g = function
     | (A.VarDecl{x;init;_}) ->
       let i = eval ctxt init in

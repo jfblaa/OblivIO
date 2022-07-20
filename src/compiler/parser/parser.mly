@@ -10,11 +10,11 @@
 %token <int> INT
 %token <string> STRING
 %token VAR CHANNEL
-%token SEMICOLON COMMA SEPARATOR DOT
+%token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
-%token FST SND PUBLEN SECLEN
-%token COLON SIZE AT PRINT EXIT PADTO
+%token FST SND
+%token COLON SIZE AT PRINT EXIT 
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
@@ -23,7 +23,7 @@
 %left OR
 %left AND
 %nonassoc EQ NEQ GT LT GE LE
-%left CARET PADTO
+%left CARET
 %left PLUS MINUS
 %left TIMES DIVIDE
 %right FST SND
@@ -53,7 +53,6 @@
 | GT      { GtOp }
 | GE      { GeOp }
 | CARET   { CaretOp }
-| PADTO   { PadOp }
 
 binop_exp:
 | MINUS right=exp %prec UMINUS
@@ -81,10 +80,6 @@ exp_base:
 | e=binop_exp       { e }
 | FST exp=exp       { ProjExp {proj=Fst; exp} }
 | SND exp=exp       { ProjExp {proj=Snd; exp} }
-| var=var DOT PUBLEN
-  { LengthExp {public=true;var} }
-| var=var DOT SECLEN
-  { LengthExp {public=false;var} }
 | pair=paren(spair(exp,COMMA,exp))
   { PairExp pair }
 | arr=brack(separated_nonempty_list(SEMICOLON,exp))
@@ -168,20 +163,9 @@ decl:
 | INPUT AT level=lvl SEMICOLON
   { InputDecl {level; pos=$startpos} }
 
-%inline localdecl:
-| VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
-  { LocalDecl {ty_opt; x; init; pos=$startpos} }
-
-%inline localdecls:
-|                        { [] }
-| l=localdecl+ SEPARATOR { l }
-
-%inline prelude:
-| cmd=cmd_seq SEPARATOR { cmd }
-
 handler:
-| effects=effect* handler=ID AT level=lvl LPAREN x=ID ty=type_anno RPAREN LBRACE decls=localdecls prelude=ioption(prelude) body=cmd_seq RBRACE
-  { Hl {handler;effects;x;ty;level;decls;prelude;body;pos=$startpos(handler)} }
+| effects=effect* handler=ID AT level=lvl LPAREN x=ID ty=type_anno RPAREN LBRACE body=cmd_seq RBRACE
+  { Hl {handler;effects;x;ty;level;body;pos=$startpos(handler)} }
 
 (* Top-level *)
 program:

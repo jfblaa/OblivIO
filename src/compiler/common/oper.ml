@@ -3,7 +3,6 @@ type oper
   | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp 
   | AndOp | OrOp
   | CaretOp
-  | PadOp
 
   let to_string = function
     | PlusOp -> "+"
@@ -19,4 +18,3 @@ type oper
     | AndOp -> "and"
     | OrOp -> "or"
     | CaretOp -> "^"
-    | PadOp -> "padto"

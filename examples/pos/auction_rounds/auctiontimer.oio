@@ -2,11 +2,10 @@ AUCTIONTIMER
 
 channel AUCTIONHOUSE/TICK@{} : int@{};
 
+var c : int@{} = 0;
+
 BEGIN@{} (i : int@{}) {
-    var c : int@{} = i * 2000;
-
-    ;;
-
+    c = i * 2000;
     while (c > 0) do {
         c = c - 1;
     }

@@ -156,10 +156,6 @@ let rec transExp ({err;_} as ctxt) =
         | CaretOp -> 
           checkString lty err pos;
           checkString rty err pos;
-          Ty.STRING 
-        | PadOp ->
-          checkString lty err pos;
-          checkInt rty err pos;
           Ty.STRING
         in
       OpExp{left;oper;right} ^! Ty.Type{base;level}
@@ -172,16 +168,6 @@ let rec transExp ({err;_} as ctxt) =
         | Fst, _ -> Fst, errTy err pos @@ "not a pair type " ^ T.to_string ty
         | Snd, _ -> Snd, errTy err pos @@ "not a pair type " ^ T.to_string ty in
       ProjExp{proj;exp} ^! ty
-    | LengthExp{public;var} ->
-      let var,ty,level = v_ty_lvl @@ transVar ctxt var in
-      begin
-      match T.base ty with
-      | T.STRING | T.ARRAY _ ->
-        if public
-        then LengthExp{public;var} ^! T.Type{base=T.INT;level=L.bottom}
-        else LengthExp{public;var} ^! T.Type{base=T.INT;level}
-      | _ -> LengthExp{public;var} ^! errTy err pos @@ "not a string or array type " ^ T.to_string ty
-      end
     | PairExp (a,b) ->
       let (a,aty) = e_ty @@ trexp a in
       let (b,bty) = e_ty @@ trexp b in
@@ -318,18 +304,6 @@ let transCmd ({err;_} as ctxt) hlchannel declared_reach =
       fromBase ExitCmd, ST.empty, 0, 0
   in trcmd
 
-let transLocal ({delta;err;_} as ctxt) (A.LocalDecl {ty_opt;x;init;pos}) =
-  let init,initty = e_ty @@ transExp ctxt init in
-  begin
-  match ty_opt with
-  | Some ty ->
-    H.add delta x ty;
-    checkAssignable initty ty err pos;
-  | None ->
-    H.add delta x initty;
-  end;
-  LocalDecl{x;ty_opt;init;pos}
-
 let transEffects ctxt hlchannel effects =
   let f (ropt,copt,oopt) = function
     | A.Reach {pos;_} when Option.is_some ropt ->
@@ -403,21 +377,16 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
     end;
     InputDecl{level;pos}
 
-let transHl ctxt node (A.Hl{handler;level;effects;x;ty;decls;prelude;body;pos}) =
+let transHl ctxt node (A.Hl{handler;level;effects;x;ty;body;pos}) =
   let hlchannel = Ch.Ch{node;handler} in
   let ctxt = {ctxt with delta = H.create 1024} in
   H.add ctxt.delta x ty;
-  let decls = List.map (transLocal ctxt) decls in
 
   let effects, declared_reach, declared_cost, declared_overhead = transEffects ctxt hlchannel effects in
 
-  let (body,rbody,cbody,obody) = transCmd ctxt hlchannel declared_reach level body in
-  if ST.mem hlchannel rbody && level <> L.bottom
+  let (body,reach,cost,overhead) = transCmd ctxt hlchannel declared_reach level body in
+  if ST.mem hlchannel reach && level <> L.bottom
   then Err.error ctxt.err pos @@ "non-public channel is recursive: " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
-  let prelude,reach,cost,overhead = match Option.map (transCmd ctxt hlchannel declared_reach L.bottom) prelude with
-  | Some (prelude,rprelude,cprelude,oprelude) ->
-    Some prelude, ST.union rprelude rbody, cprelude + cbody, oprelude + obody
-  | None -> None, rbody, cbody, obody in
   begin
   match ST.diff declared_reach reach with
   | s when not (ST.is_empty s) -> Err.error ctxt.err pos @@ "unreachable channels declared reachable " ^ String.concat ", " (List.map Ch.to_string @@ List.of_seq @@ ST.to_seq s)
@@ -427,7 +396,7 @@ let transHl ctxt node (A.Hl{handler;level;effects;x;ty;decls;prelude;body;pos}) 
   then Err.error ctxt.err pos @@ "incorrect cost for " ^ Ch.to_string hlchannel ^ " -- declared: " ^ Int.to_string declared_cost ^ ", inferred: " ^ Int.to_string cost;
   if declared_overhead <> overhead
   then Err.error ctxt.err pos @@ "incorrect overhead for " ^ Ch.to_string hlchannel ^ " -- declared: " ^ Int.to_string declared_overhead ^ ", inferred: " ^ Int.to_string overhead;
-  Hl{handler;level;effects;x;ty;decls;prelude;body;pos}
+  Hl{handler;level;effects;x;ty;body;pos}
 
 let transProg (A.Prog{node;decls;hls}) =
   let ctxt = 
