@@ -298,6 +298,13 @@ let transCmd ({err;_} as ctxt) hlchannel declared_reach =
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
       let (body,rbody,cbody,obody) = trcmd pc body in
+      let highpc = not @@ L.flows_to pc L.bottom in
+      if highpc && not @@ ST.is_empty rbody
+      then Err.error err pos @@ "reach for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be empty";
+      if highpc && cbody <> 0
+      then Err.error err pos @@ "cost for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be 0";
+      if highpc && obody <> 0
+      then Err.error err pos @@ "overhead for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be 0";
       fromBase @@ WhileCmd{test;body}, rbody, cbody, obody
     | OblivIfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in

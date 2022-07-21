@@ -1,0 +1,24 @@
+ALICE
+
+channel BOB/PONG@{H} : int@{H};
+
+#reach [BOB/PONG]
+PING@{} (secret : int@{H}) {
+    if 0
+    then {
+        oblif secret
+        then {
+            send(BOB/PONG, 42);
+            send(BOB/PONG, 42);
+        }
+        else send(BOB/PONG, 42);
+    }
+    else {
+        oblif secret
+        then send(BOB/PONG, 42);
+        else {
+            send(BOB/PONG, 42);
+            send(BOB/PONG, 42);
+        }
+    }
+}
