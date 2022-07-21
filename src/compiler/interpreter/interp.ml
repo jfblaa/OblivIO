@@ -318,22 +318,18 @@ let rec readvar ctxt =
 in _V []
 
 and writevar ctxt updkind upd mode =
-  let rec _V path (A.Var{var_base;loc;_}) = match var_base with
+  let rec _V path (A.Var{var_base;_}) = match var_base with
     | A.SimpleVar x ->
-      let table =
-        match loc with
-        | LOCAL -> ctxt.memory
-        | STORE -> ctxt.store in
-      let v = lookup table x in
+      let v = lookup ctxt.store x in
       let rec f path v mode =
         match path, v with
         | [], _ ->
           begin 
           match updkind, ctxt.unsafe with
           | BIND, false ->
-            let orig = lookup table x in
-            H.add table x @@ safeSelect mode orig upd
-          | _ -> if mode = 1 then H.add table x upd
+            let orig = lookup ctxt.store x in
+            H.add ctxt.store x @@ safeSelect mode orig upd
+          | _ -> if mode = 1 then H.add ctxt.store x upd
           end
         | [(i,lvl)], ArrayVal{length;data} ->
           let maxidx = length -1 in
@@ -420,7 +416,7 @@ and eval ctxt =
 exception Exit
 
 let interpCmd ctxt =
-  let getMode () =
+  let mode =
     match ctxt.mode with
     | m::_ -> m
     | [] -> raise @@ InterpFatal "getMode: stack empty" in
@@ -431,32 +427,30 @@ let interpCmd ctxt =
       _I c1;
       _I c2
     | AssignCmd { var; exp } ->
-      let Var{loc;_} = var in
       begin 
-        match loc, getMode () with
-        | STORE, 0 -> ()
-        | _ ->
-          let v = eval ctxt exp in
-          writevar ctxt ASSIGN v 1 var
+      match mode with
+      | 0 -> ()
+      | _ ->
+        let v = eval ctxt exp in
+        writevar ctxt ASSIGN v 1 var
       end
     | BindCmd { var; exp } when ctxt.unsafe ->
-      let Var{loc;_} = var in
       begin 
-        match loc, getMode () with
-        | STORE, 0 -> ()
+        match mode with
+        | 0 -> ()
         | _ ->
           let v = eval ctxt exp in
           writevar ctxt ASSIGN v 1 var
       end
     | BindCmd { var; exp } ->
       let v = eval ctxt exp in
-      writevar ctxt BIND v (getMode ()) var;
+      writevar ctxt BIND v mode var;
     | InputCmd { var; _ } when ctxt.unsafe ->
       let arr = ctxt.input_buffer in
       let len = Array.length arr in
       let blank = Array.make len '\000' in
       let j = ref 0 in
-      if (getMode () = 1) then (
+      if (mode = 1) then (
         begin
         try 
           for i = 0 to len-1 do
@@ -467,7 +461,7 @@ let interpCmd ctxt =
           done;
         with Unequal -> ();
         end;
-        writevar ctxt ASSIGN (StringVal{length=(!j);data=blank}) (getMode ()) var;
+        writevar ctxt ASSIGN (StringVal{length=(!j);data=blank}) mode var;
       );
     | InputCmd { var; size; _ } ->
       let ne = _int @@ eval ctxt size in
@@ -475,7 +469,7 @@ let interpCmd ctxt =
       let len = min ne max_len in
       let data = Array.sub ctxt.input_buffer 0 len in
       let updbit = Bool.to_int @@ (data.(0) <> '\000') in
-      let shouldBind = getMode () land updbit in
+      let shouldBind = mode land updbit in
       let str = StringVal{length=Array.length data;data} in
       writevar ctxt BIND str shouldBind var;
 
@@ -493,7 +487,7 @@ let interpCmd ctxt =
         | _ -> raise @@ InterpFatal "InputCmd"
       end
     | SendCmd { channel; exp } when ctxt.unsafe ->
-      let bit = getMode () in
+      let bit = mode in
       if (bit = 1) then (
         let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
         let lbit = M.Lbit{bit; level=bitlvl} in
@@ -503,7 +497,7 @@ let interpCmd ctxt =
       )
     | SendCmd { channel; exp } ->
       let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
-      let lbit = M.Lbit{bit=getMode (); level=bitlvl} in
+      let lbit = M.Lbit{bit=mode; level=bitlvl} in
       let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
       let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
       send ctxt msg
@@ -531,7 +525,7 @@ let interpCmd ctxt =
         match v with
         | IntVal n -> Bool.to_int @@ (n <> 0)
         | _ -> 1 in
-      let mode = getMode () in
+      let mode = mode in
       ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
       let (~>) cmd_base = A.Cmd{cmd_base;pos} in
       _I thn;
@@ -545,7 +539,6 @@ let interpCmd ctxt =
       | [] -> raise @@ InterpFatal ("PopCmd: stack empty")
       end
     | PrintCmd { info; exp } ->
-      let mode = getMode () in
       let v = eval ctxt exp in
       let intro =
         match info with

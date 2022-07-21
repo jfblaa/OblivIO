@@ -215,6 +215,11 @@ and transVar ({err;_} as ctxt) =
       end
   in trvar
 
+let rec varname (Var{var_base;_}) =
+  match var_base with
+  | SimpleVar x -> x
+  | SubscriptVar{var;_} -> varname var
+
 let transCmd ({err;_} as ctxt) hlchannel declared_reach =
   let rec trcmd pc (A.Cmd{cmd_base;pos}): cmd * ST.t * int * int =
     let fromBase cmd_base = Cmd{cmd_base;pos} in
@@ -225,19 +230,28 @@ let transCmd ({err;_} as ctxt) hlchannel declared_reach =
       let (c2,r2,co2,o2) = trcmd pc c2 in
       fromBase @@ SeqCmd {c1;c2}, ST.union r1 r2, co1 + co2, o1 + o2
     | AssignCmd {var;exp} ->
-      let var,varty,loc = v_ty_loc @@ transVar ctxt var in
+      let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
+      checkLowPC pc err pos;
       begin
-        match loc with
-        | LOCAL -> ()
+        match varloc with
+        | LOCAL ->
+          Err.error err pos @@ "handler variable " ^ varname var ^ " is read-only";
         | STORE -> 
           checkLowPC pc err pos
       end;
       checkAssignable ety varty err pos;
       fromBase @@ AssignCmd{var;exp=e}, ST.empty, 0, 0
     | BindCmd {var;exp} ->
-      let var,varty = v_ty @@ transVar ctxt var in
+      let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
+      begin
+        match varloc with
+        | LOCAL ->
+          Err.error err pos @@ "handler variable " ^ varname var ^ " is read-only";
+        | STORE -> 
+          ()
+      end;
       checkAssignable (raiseTo ety pc) varty err pos;
       fromBase @@ BindCmd{var;exp=e}, ST.empty, 0, 0
     | InputCmd {var;size} ->
