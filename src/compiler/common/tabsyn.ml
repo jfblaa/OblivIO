@@ -7,16 +7,12 @@ module Ch = Channel
 include Oper
 
 type program = Prog of { node: string; decls: decl list; hls: hl list }
-and effect
-  = Reach of {channels: Ch.channel list; pos: pos}
-  | Cost of {cost: int; pos: pos}
-  | Overhead of {overhead: int; pos: pos}
 and decl
   = VarDecl of { x: string; ty_opt: T.ty option; init: exp; pos: pos }
-  | ChannelDecl of { channel: Ch.channel; level: L.level; effects: effect list; ty: T.ty; pos: pos }
+  | ChannelDecl of { channel: Ch.channel; level: L.level; capability: (Ch.channel * int) list; ty: T.ty; pos: pos }
   | InputDecl of { level: L.level; pos: pos }
 and hl
-  = Hl of { handler: string; level: L.level; effects: effect list; x: string; ty: T.ty; body: cmd; pos: pos }
+  = Hl of { handler: string; level: L.level; capability: (Ch.channel * int) list; x: string; ty: T.ty; body: cmd; pos: pos }
 and var = Var of { var_base: var_base; loc: varloc; ty: T.ty; pos: pos }
 and varloc = LOCAL | STORE
 and var_base =

@@ -1,14 +1,11 @@
 BOB
 
-channel
-    #reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
-    AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{};
+channel AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{} [AUCTIONHOUSE/BID:1; ALICE/AUCTION_STATUS:1;BOB/AUCTION_STATUS:1;ALICE/AUCTION_OVER:1;BOB/AUCTION_OVER:1];
 
 var bid : int@{H} = 0;
 var max_bid : int@{H} = 350;
 
-#reach [AUCTIONHOUSE/BID;ALICE/AUCTION_STATUS;BOB/AUCTION_STATUS;ALICE/AUCTION_OVER;BOB/AUCTION_OVER]
-AUCTION_STATUS@{H} (winning_bid : (string@{H}*int@{H})@{H}) {
+AUCTION_STATUS@{H} (winning_bid : (string@{H}*int@{H})@{H}) [AUCTIONHOUSE/BID:1; ALICE/AUCTION_STATUS:1;BOB/AUCTION_STATUS:1;ALICE/AUCTION_OVER:1;BOB/AUCTION_OVER:1] {
     oblif fst winning_bid != "Bob"
     then
         oblif snd winning_bid < max_bid 

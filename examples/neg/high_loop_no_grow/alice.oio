@@ -1,13 +1,8 @@
 ALICE
 
-channel
-    #reach [ALICE/A2;BOB/B2]
-    #cost 1
-    BOB/B2@{H} : int@{H};
+channel BOB/B2@{H} : int@{H} [ALICE/A2: 1;BOB/B2: 1];
 
-#reach [ALICE/A2;BOB/B2]
-#cost 1
-A2@{H} (secret : int@{H}) {
+A2@{H} (secret : int@{H}) [ALICE/A2: 1;BOB/B2: 1] {
     print("ALICE/A2 received", secret);
     send(BOB/B2, secret+1);
 }

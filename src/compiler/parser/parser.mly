@@ -18,7 +18,6 @@
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
 %token INTTYPE STRINGTYPE
-%token REACH COST OVERHEAD
 
 %left OR
 %left AND
@@ -147,25 +146,23 @@ channel:
 | node=ID DIVIDE handler=ID
   { Ch.Ch {node;handler} }
 
-effect:
-| REACH channels=brack(separated_nonempty_list(SEMICOLON,channel))
-  { Reach {channels;pos=$startpos} }
-| COST cost=INT
-  { Cost {cost;pos=$startpos} }
-| OVERHEAD overhead=INT
-  { Overhead {overhead;pos=$startpos} }
+capabilities:
+| 
+  { [] }
+| ls=brack(separated_nonempty_list(SEMICOLON,spair(channel,COLON,INT)))
+  { ls }
 
 decl:
 | VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
   { VarDecl {ty_opt; x; init; pos=$startpos} }
-| CHANNEL effects=effect* channel=channel AT level=lvl ty=type_anno SEMICOLON
-  { ChannelDecl {ty; level; channel; effects; pos=$startpos(channel)} }
+| CHANNEL channel=channel AT level=lvl ty=type_anno capability=capabilities SEMICOLON
+  { ChannelDecl {ty; level; channel; capability; pos=$startpos(channel)} }
 | INPUT AT level=lvl SEMICOLON
   { InputDecl {level; pos=$startpos} }
 
 handler:
-| effects=effect* handler=ID AT level=lvl LPAREN x=ID ty=type_anno RPAREN LBRACE body=cmd_seq RBRACE
-  { Hl {handler;effects;x;ty;level;body;pos=$startpos(handler)} }
+| handler=ID AT level=lvl LPAREN x=ID ty=type_anno RPAREN capability=capabilities LBRACE body=cmd_seq RBRACE
+  { Hl {handler;capability;x;ty;level;body;pos=$startpos(handler)} }
 
 (* Top-level *)
 program:

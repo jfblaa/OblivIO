@@ -6,7 +6,6 @@ let rec take k xs =
     | [] -> failwith "Util.take"
     | y::ys -> y :: take (k - 1) ys
 
-
 (*let toBytes x = 
   Marshal.to_bytes x []
 

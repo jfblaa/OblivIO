@@ -1,26 +1,15 @@
 ALICE
 
-channel
-    #reach [ALICE/A1;BOB/B1;ALICE/A2;BOB/B2]
-    #overhead 1
-    BOB/B1@{H} : int@{H};
+channel BOB/B1@{H} : int@{H} [ALICE/A1: 1;BOB/B1: 1;ALICE/A2: 1;BOB/B2: 1];
 
-channel
-    #reach [ALICE/A2;BOB/B2]
-    #cost 1
-    BOB/B2@{H} : int@{H};
+channel BOB/B2@{H} : int@{H} [ALICE/A2: 1;BOB/B2: 1];
 
-#reach [ALICE/A1;BOB/B1;ALICE/A2;BOB/B2]
-#cost 2
-#overhead 1
-A1@{H} (secret : int@{H}) {
+A1@{H} (secret : int@{H}) [ALICE/A1: 1;BOB/B1: 1;ALICE/A2: 1;BOB/B2: 1] {
     send(BOB/B1, secret+1);
     send(BOB/B2, secret+1);
 }
 
-#reach [ALICE/A2;BOB/B2]
-#cost 1
-A2@{H} (secret : int@{H}) {
+A2@{H} (secret : int@{H}) [ALICE/A2: 1; BOB/B2: 1] {
     print("ALICE/A2 received", secret);
     send(BOB/B2, secret+1);
 }

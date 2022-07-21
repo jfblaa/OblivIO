@@ -10,11 +10,13 @@ module Ch = Channel
 
 module H = Hashtbl
 
-module ST = Set.Make(Channel)
+module C = Map.Make(Channel)
+
+type capability = int C.t
 
 type context 
   = { gamma: (string, Ty.ty) H.t
-    ; lambda: (Ch.channel, (L.level * Ty.ty * ST.t * int*int)) H.t
+    ; lambda: (Ch.channel, (L.level * Ty.ty * capability)) H.t
     ; delta: (string, Ty.ty) H.t
     ; mutable input: L.level option
     ; err:  Err.errorenv 
@@ -51,7 +53,7 @@ let lookupInternal ({input;err;_}) pos =
 let lookupRemote ({lambda;err;_}) ch pos = 
   match H.find_opt lambda ch with
   | Some lvl_ty_cap -> lvl_ty_cap
-  | None -> L.bottom, errTy err pos @@ "undeclared channel " ^ Ch.to_string ch, ST.empty, 0, 0
+  | None -> L.bottom, errTy err pos @@ "undeclared channel " ^ Ch.to_string ch, C.empty
 
 let e_ty (Exp{ty;_} as e) = (e,ty)
 let e_ty_lvl (Exp{ty;_} as e) = (e,ty,Ty.level ty)
@@ -125,6 +127,15 @@ let checkString t err pos =
   match Ty.base t with
   | Ty.STRING -> ()
   | b -> Err.error err pos @@ "string required, " ^ Ty.base_to_string b ^ " provided"
+
+let join (f: int -> int -> int) (a: int C.t) (b: int C.t) =
+  let g _ xo yo =
+    match xo, yo with
+    | Some x, Some y -> Some (f x y)
+    | Some x, None -> Some x
+    | None, Some y -> Some y
+    | None, None -> None in
+  C.merge g a b
 
 exception NotImplemented of string
 
@@ -220,15 +231,15 @@ let rec varname (Var{var_base;_}) =
   | SimpleVar x -> x
   | SubscriptVar{var;_} -> varname var
 
-let transCmd ({err;_} as ctxt) hlchannel declared_reach =
-  let rec trcmd pc (A.Cmd{cmd_base;pos}): cmd * ST.t * int * int =
+let transCmd ({err;_} as ctxt) =
+  let rec trcmd pc (A.Cmd{cmd_base;pos}): cmd * capability =
     let fromBase cmd_base = Cmd{cmd_base;pos} in
     match cmd_base with
-    | SkipCmd -> fromBase SkipCmd, ST.empty, 0, 0
+    | SkipCmd -> fromBase SkipCmd, C.empty
     | SeqCmd {c1;c2} ->
-      let (c1,r1,co1,o1) = trcmd pc c1 in
-      let (c2,r2,co2,o2) = trcmd pc c2 in
-      fromBase @@ SeqCmd {c1;c2}, ST.union r1 r2, co1 + co2, o1 + o2
+      let (c1,e1) = trcmd pc c1 in
+      let (c2,e2) = trcmd pc c2 in
+      fromBase @@ SeqCmd {c1;c2}, join (+) e1 e2
     | AssignCmd {var;exp} ->
       let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -241,7 +252,7 @@ let transCmd ({err;_} as ctxt) hlchannel declared_reach =
           checkLowPC pc err pos
       end;
       checkAssignable ety varty err pos;
-      fromBase @@ AssignCmd{var;exp=e}, ST.empty, 0, 0
+      fromBase @@ AssignCmd{var;exp=e}, C.empty
     | BindCmd {var;exp} ->
       let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -253,7 +264,7 @@ let transCmd ({err;_} as ctxt) hlchannel declared_reach =
           ()
       end;
       checkAssignable (raiseTo ety pc) varty err pos;
-      fromBase @@ BindCmd{var;exp=e}, ST.empty, 0, 0
+      fromBase @@ BindCmd{var;exp=e}, C.empty
     | InputCmd {var;size} ->
       let var,varty = v_ty @@ transVar ctxt var in
       let chlvl = lookupInternal ctxt pos in
@@ -261,114 +272,47 @@ let transCmd ({err;_} as ctxt) hlchannel declared_reach =
       checkAssignable (Ty.Type{base=Ty.STRING;level=L.lub chlvl pc}) varty err pos;
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
-      fromBase @@ InputCmd{var;size}, ST.empty, 0, 0
+      fromBase @@ InputCmd{var;size}, C.empty
     | SendCmd {channel;exp} ->
-      let (chlvl,chty,chreach,chcost,choverhead) = lookupRemote ctxt channel pos in
+      let (chlvl,chty,chcapability) = lookupRemote ctxt channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
       checkFlow pc chlvl err pos;
       checkAssignable ety chty err pos;
-
-      let reach, cost, overhead =
-        match L.flows_to chlvl L.bottom with
-        | true -> ST.empty, 0, 0
-        | false ->
-          if not @@ ST.mem channel declared_reach
-          then Err.error err pos @@ "non-public channel must be declared reachable for sending: " ^ Ch.to_string channel ^ "@" ^ L.to_string chlvl;
-          if ST.mem hlchannel chreach
-          then Err.error err pos @@ "non-public channel is be recursive: " ^ Ch.to_string channel ^ "@" ^ L.to_string chlvl;
-          begin
-          match ST.diff chreach declared_reach with
-          | s when not (ST.is_empty s) -> Err.error err pos @@ "non-public channel " ^ Ch.to_string channel ^ "@" ^ L.to_string chlvl ^ " reaches undeclared channels " ^ String.concat ", " (List.map Ch.to_string @@ List.of_seq @@ ST.to_seq s);
-          | _ -> ()
-          end;
-          ST.add channel chreach, chcost+1, choverhead in
-
-      fromBase @@ SendCmd{channel;exp=e}, reach, cost, overhead
+      let capability = match L.flows_to chlvl L.bottom with
+        | true -> C.empty
+        | false -> C.update channel (fun io -> Some(Option.fold ~none:1 ~some:(fun i -> i+1) io)) chcapability in
+      fromBase @@ SendCmd{channel;exp=e}, capability
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let (thn, rthn, cthn, othn) = trcmd pc thn in
-      let (els, rels, cels, oels) = trcmd pc els in
-      let cost = min cthn cels in
-      let overhead = max (cthn+othn) (cels+oels) - cost in
-      fromBase @@ IfCmd{test;thn;els}, ST.union rthn rels, cost, overhead
+      let (thn,ethn) = trcmd pc thn in
+      let (els,eels) = trcmd pc els in
+      fromBase @@ IfCmd{test;thn;els}, join max ethn eels
     | WhileCmd{test;body} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let (body,rbody,cbody,obody) = trcmd pc body in
-      let highpc = not @@ L.flows_to pc L.bottom in
-      if highpc && not @@ ST.is_empty rbody
-      then Err.error err pos @@ "reach for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be empty";
-      if highpc && cbody <> 0
-      then Err.error err pos @@ "cost for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be 0";
-      if highpc && obody <> 0
-      then Err.error err pos @@ "overhead for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be 0";
-      fromBase @@ WhileCmd{test;body}, rbody, cbody, obody
+      let (body,ebody) = trcmd pc body in
+      if L.flows_to pc L.bottom || C.is_empty ebody
+      then ()
+      else Err.error err pos @@ "capability for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be empty";
+      fromBase @@ WhileCmd{test;body}, ebody
     | OblivIfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
-      let (thn, rthn, cthn, othn) = trcmd (L.lub pc testlvl) thn in
-      let (els, rels, cels, oels) = trcmd (L.lub pc testlvl) els in
-      let reach = ST.union rthn rels in
+      let (thn, ethn) = trcmd (L.lub pc testlvl) thn in
+      let (els, eels) = trcmd (L.lub pc testlvl) els in
       if L.flows_to testlvl L.bottom
       then Err.error err pos @@ "test for oblif is labelled public";
-      let cost = min cthn cels in
-      let overhead = othn + oels + max cthn cels in
-      fromBase @@ OblivIfCmd{test;thn;els}, reach, cost, overhead
+      fromBase @@ OblivIfCmd{test;thn;els}, join (+) ethn eels
     | PrintCmd {info;exp} ->
       let exp = transExp ctxt exp in
-      fromBase @@ PrintCmd{info;exp}, ST.empty, 0, 0
+      fromBase @@ PrintCmd{info;exp}, C.empty
     | ExitCmd -> 
       checkLowPC pc err pos;
-      fromBase ExitCmd, ST.empty, 0, 0
+      fromBase ExitCmd, C.empty
   in trcmd
-
-let transEffects ctxt hlchannel effects =
-  let f (ropt,copt,oopt) = function
-    | A.Reach {pos;_} when Option.is_some ropt ->
-      Err.error ctxt.err pos @@ "reach already declared for channel " ^ Ch.to_string hlchannel;
-      (ropt,copt,oopt)
-    | A.Reach {channels; pos} ->
-      (Some (ST.of_list channels, pos), copt, oopt)
-    | A.Cost {pos;_} when Option.is_some copt ->
-      Err.error ctxt.err pos @@ "cost already declared for channel " ^ Ch.to_string hlchannel;
-      (ropt,copt,oopt)
-    | A.Cost {cost;pos} ->
-      (ropt,Some (cost, pos),oopt)
-    | A.Overhead {pos;_} when Option.is_some oopt ->
-      Err.error ctxt.err pos @@ "overhead already declared for channel " ^ Ch.to_string hlchannel;
-      (ropt,copt,oopt)
-    | A.Overhead {overhead;pos} ->
-      (ropt,copt,Some (overhead,pos)) in
-
-  let (ropt,copt,oopt) = List.fold_left f (None,None,None) effects in
-
-  let g = function
-      | A.Reach {channels;pos} -> Reach{channels;pos}
-      | A.Cost {cost;pos} -> Cost{cost;pos}
-      | A.Overhead {overhead;pos} -> Overhead{overhead;pos} in
-
-  let r, c, o =
-    match ropt,copt,oopt with
-    | None, None, None ->
-      ST.empty, 0, 0
-    | None, Some (_,pos), _ ->
-      Err.error ctxt.err pos @@ "cost declared for channel with no reach";
-      ST.empty, 0, 0
-    | None, _, Some (_,pos) ->
-      Err.error ctxt.err pos @@ "overhead declared for channel with no reach";
-      ST.empty, 0, 0
-    | Some (r,_), None, None ->
-      r, 0, 0
-    | Some (r,_), Some (c,_), Some (o,_) ->
-      r, c, o
-    | Some (r,_), Some (c,_), None ->
-      r, c, 0
-    | Some (r,_), None, Some (o,_) ->
-      r, 0, o in
-  List.map g effects, r, c, o
 
 let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
   match dec with
@@ -384,12 +328,12 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
     | None -> H.add gamma x initty
     end;
     VarDecl{x;ty_opt;init;pos}
-  | A.ChannelDecl {channel;level;effects;ty;pos} ->
-    let effects, reach, cost, overhead = transEffects ctxt channel effects in
-    H.add lambda channel (level,ty,reach,cost,overhead);
-    if ST.mem channel reach && level <> L.bottom
-    then Err.error ctxt.err pos @@ "non-public channel is recursive: " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
-    ChannelDecl{channel;level;effects;ty;pos}
+  | A.ChannelDecl {channel;level;capability;ty;pos} ->
+    let capabilityMap = C.of_seq @@ List.to_seq capability in
+    H.add lambda channel (level,ty,capabilityMap);
+    if C.mem channel capabilityMap && level <> L.bottom
+    then Err.error ctxt.err pos @@ "illegal self capability for declared channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
+    ChannelDecl{channel;level;capability;ty;pos}
   | A.InputDecl{level;pos} ->
     begin
     match input with
@@ -398,26 +342,24 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
     end;
     InputDecl{level;pos}
 
-let transHl ctxt node (A.Hl{handler;level;effects;x;ty;body;pos}) =
-  let hlchannel = Ch.Ch{node;handler} in
+let transHl ctxt node (A.Hl{handler;level;capability;x;ty;body;pos}) =
   let ctxt = {ctxt with delta = H.create 1024} in
   H.add ctxt.delta x ty;
 
-  let effects, declared_reach, declared_cost, declared_overhead = transEffects ctxt hlchannel effects in
+  let (body,cbody) = transCmd ctxt level body in
 
-  let (body,reach,cost,overhead) = transCmd ctxt hlchannel declared_reach level body in
-  if ST.mem hlchannel reach && level <> L.bottom
-  then Err.error ctxt.err pos @@ "non-public channel is recursive: " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
+  let hlchannel = Ch.Ch{node;handler} in
+  if C.mem hlchannel cbody && level <> L.bottom
+  then Err.error ctxt.err pos @@ "illegal self capability needed for handler " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
+
+  let declared_capability = C.of_seq @@ List.to_seq capability in
+  let negativeCapabilities = C.filter (fun _ i -> i < 0) @@ join (-) declared_capability cbody in
   begin
-  match ST.diff declared_reach reach with
-  | s when not (ST.is_empty s) -> Err.error ctxt.err pos @@ "unreachable channels declared reachable " ^ String.concat ", " (List.map Ch.to_string @@ List.of_seq @@ ST.to_seq s)
-  | _ -> ()
+  let _s (ch,i) = Ch.to_string ch ^ ": " ^ Int.to_string (abs i) in
+  if not @@ C.is_empty negativeCapabilities
+  then Err.error ctxt.err pos @@ "missing capabilities [" ^ String.concat ", " (List.map _s @@ List.of_seq @@ C.to_seq negativeCapabilities) ^ "]";
   end;
-  if declared_cost <> cost
-  then Err.error ctxt.err pos @@ "incorrect cost for " ^ Ch.to_string hlchannel ^ " -- declared: " ^ Int.to_string declared_cost ^ ", inferred: " ^ Int.to_string cost;
-  if declared_overhead <> overhead
-  then Err.error ctxt.err pos @@ "incorrect overhead for " ^ Ch.to_string hlchannel ^ " -- declared: " ^ Int.to_string declared_overhead ^ ", inferred: " ^ Int.to_string overhead;
-  Hl{handler;level;effects;x;ty;body;pos}
+  Hl{handler;level;capability;x;ty;body;pos}
 
 let transProg (A.Prog{node;decls;hls}) =
   let ctxt = 

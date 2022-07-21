@@ -1,21 +1,14 @@
 BOB
 
-channel
-    #reach [ALICE/A2;BOB/B2]
-    #cost 1
-    ALICE/A2@{H} : int@{H};
+channel ALICE/A2@{H} : int@{H} [ALICE/A2: 1;BOB/B2: 1];
 
 var bobs_secret : int@{H} = 0;
 
-#reach [ALICE/A2;BOB/B2]
-#cost 1
-START@{} (i : int@{}) {
+START@{} (i : int@{}) [ALICE/A2: 1;BOB/B2: 1] {
     send(ALICE/A2, bobs_secret);
 }
 
-#reach [ALICE/A2;BOB/B2]
-#cost 1
-B2@{H} (secret : int@{H}) {
+B2@{H} (secret : int@{H}) [ALICE/A2: 1;BOB/B2: 1] {
     print("BOB/B2 received", secret);
     send(ALICE/A2, secret);
 }

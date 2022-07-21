@@ -1,26 +1,17 @@
 ALICE
 
-channel
-    #reach [ALICE/A2;BOB/B2]
-    #cost 2
-    #overhead 4
-    BOB/B1@{H} : int@{H};
+channel BOB/B1@{H} : int@{H} [ALICE/A2: 2; BOB/B2: 4];
 
 channel BOB/B2@{H} : int@{H};
 
-#reach [BOB/B1;ALICE/A2;BOB/B2]
-#cost 3
-#overhead 11
-A1@{H} (secret : int@{H}) {
+A1@{H} (secret : int@{H}) [BOB/B1: 2; ALICE/A2: 4; BOB/B2: 8] {
     oblif secret
     then send(BOB/B1, secret+1);
     else send(BOB/B1, secret-1);
 }
 
-#reach [BOB/B2]
-#cost 1
-#overhead 1
-A2@{H} (secret : int@{H}) {
+
+A2@{H} (secret : int@{H}) [BOB/B2: 2] {
     oblif secret
     then send(BOB/B2, secret+1);
     else send(BOB/B2, secret-1);
