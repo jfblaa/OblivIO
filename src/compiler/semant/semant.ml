@@ -232,14 +232,14 @@ let rec varname (Var{var_base;_}) =
   | SubscriptVar{var;_} -> varname var
 
 let transCmd ({err;_} as ctxt) =
-  let rec trcmd pc (A.Cmd{cmd_base;pos}): cmd * capability =
+  let rec trcmd pc (cap: capability) (A.Cmd{cmd_base;pos}): cmd * capability =
     let fromBase cmd_base = Cmd{cmd_base;pos} in
     match cmd_base with
     | SkipCmd -> fromBase SkipCmd, C.empty
     | SeqCmd {c1;c2} ->
-      let (c1,e1) = trcmd pc c1 in
-      let (c2,e2) = trcmd pc c2 in
-      fromBase @@ SeqCmd {c1;c2}, join (+) e1 e2
+      let (c1,cap') = trcmd pc cap c1 in
+      let (c2,cap'') = trcmd pc cap' c2 in
+      fromBase @@ SeqCmd {c1;c2}, cap''
     | AssignCmd {var;exp} ->
       let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -252,7 +252,7 @@ let transCmd ({err;_} as ctxt) =
           checkLowPC pc err pos
       end;
       checkAssignable ety varty err pos;
-      fromBase @@ AssignCmd{var;exp=e}, C.empty
+      fromBase @@ AssignCmd{var;exp=e}, cap
     | BindCmd {var;exp} ->
       let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -264,7 +264,7 @@ let transCmd ({err;_} as ctxt) =
           ()
       end;
       checkAssignable (raiseTo ety pc) varty err pos;
-      fromBase @@ BindCmd{var;exp=e}, C.empty
+      fromBase @@ BindCmd{var;exp=e}, cap
     | InputCmd {var;size} ->
       let var,varty = v_ty @@ transVar ctxt var in
       let chlvl = lookupInternal ctxt pos in
@@ -272,46 +272,54 @@ let transCmd ({err;_} as ctxt) =
       checkAssignable (Ty.Type{base=Ty.STRING;level=L.lub chlvl pc}) varty err pos;
       checkInt sizety err pos;
       checkFlow sizelvl L.bottom err pos;
-      fromBase @@ InputCmd{var;size}, C.empty
+      fromBase @@ InputCmd{var;size}, cap
     | SendCmd {channel;exp} ->
       let (chlvl,chty,chcapability) = lookupRemote ctxt channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
       checkFlow pc chlvl err pos;
       checkAssignable ety chty err pos;
-      let capability = match L.flows_to chlvl L.bottom with
+
+      let capabilityNeeded = match L.flows_to chlvl L.bottom with
         | true -> C.empty
         | false -> C.update channel (fun io -> Some(Option.fold ~none:1 ~some:(fun i -> i+1) io)) chcapability in
-      fromBase @@ SendCmd{channel;exp=e}, capability
+
+      let capabilityLeft = join (-) cap capabilityNeeded in
+
+      begin
+      let _s (ch,i) = Ch.to_string ch ^ ": " ^ Int.to_string (abs i) in
+      let negativeCapabilities = C.filter (fun _ i -> i < 0) @@ join (-) cap capabilityNeeded in
+      if not @@ C.is_empty negativeCapabilities
+      then Err.error ctxt.err pos @@ "capability for sending on channel " ^ Ch.to_string channel ^ " [" ^ String.concat ", " (List.map _s @@ List.of_seq @@ C.to_seq negativeCapabilities) ^ "]";
+      end;
+
+      fromBase @@ SendCmd{channel;exp=e}, capabilityLeft
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let (thn,ethn) = trcmd pc thn in
-      let (els,eels) = trcmd pc els in
-      fromBase @@ IfCmd{test;thn;els}, join max ethn eels
+      let (thn,cap') = trcmd pc cap thn in
+      let (els,cap'') = trcmd pc cap els in
+      fromBase @@ IfCmd{test;thn;els}, join min cap' cap''
     | WhileCmd{test;body} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
       checkFlow testlvl L.bottom err pos;
-      let (body,ebody) = trcmd pc body in
-      if L.flows_to pc L.bottom || C.is_empty ebody
-      then ()
-      else Err.error err pos @@ "capability for while-loop under non-public pc-label " ^ L.to_string pc ^ " must be empty";
-      fromBase @@ WhileCmd{test;body}, ebody
+      let (body,cap') = trcmd pc C.empty body in
+      fromBase @@ WhileCmd{test;body}, cap'
     | OblivIfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
-      let (thn, ethn) = trcmd (L.lub pc testlvl) thn in
-      let (els, eels) = trcmd (L.lub pc testlvl) els in
+      let (thn, cap') = trcmd (L.lub pc testlvl) cap thn in
+      let (els, cap'') = trcmd (L.lub pc testlvl) cap' els in
       if L.flows_to testlvl L.bottom
       then Err.error err pos @@ "test for oblif is labelled public";
-      fromBase @@ OblivIfCmd{test;thn;els}, join (+) ethn eels
+      fromBase @@ OblivIfCmd{test;thn;els}, cap''
     | PrintCmd {info;exp} ->
       let exp = transExp ctxt exp in
-      fromBase @@ PrintCmd{info;exp}, C.empty
+      fromBase @@ PrintCmd{info;exp}, cap
     | ExitCmd -> 
       checkLowPC pc err pos;
-      fromBase ExitCmd, C.empty
+      fromBase ExitCmd, cap
   in trcmd
 
 let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
@@ -346,19 +354,22 @@ let transHl ctxt node (A.Hl{handler;level;capability;x;ty;body;pos}) =
   let ctxt = {ctxt with delta = H.create 1024} in
   H.add ctxt.delta x ty;
 
-  let (body,cbody) = transCmd ctxt level body in
-
   let hlchannel = Ch.Ch{node;handler} in
-  if C.mem hlchannel cbody && level <> L.bottom
+
+  let capabilityMap = C.of_seq @@ List.to_seq capability in
+
+  if C.mem hlchannel capabilityMap
   then Err.error ctxt.err pos @@ "illegal self capability needed for handler " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
 
-  let declared_capability = C.of_seq @@ List.to_seq capability in
-  let negativeCapabilities = C.filter (fun _ i -> i < 0) @@ join (-) declared_capability cbody in
+  let (body,_) = transCmd ctxt level capabilityMap body in
+
+  (*let negativeCapabilities = C.filter (fun _ i -> i < 0) cbody in
   begin
-  let _s (ch,i) = Ch.to_string ch ^ ": " ^ Int.to_string (abs i) in
+  let _s (ch,i) = Ch.to_string ch ^ ": " ^ Int.to_string i in
   if not @@ C.is_empty negativeCapabilities
-  then Err.error ctxt.err pos @@ "missing capabilities [" ^ String.concat ", " (List.map _s @@ List.of_seq @@ C.to_seq negativeCapabilities) ^ "]";
-  end;
+  then Err.error ctxt.err pos @@ "handler ended up with negative capability... " ^ Ch.to_string hlchannel ^ " [" ^ String.concat ", " (List.map _s @@ List.of_seq @@ C.to_seq negativeCapabilities) ^ "]";
+  end;*)
+
   Hl{handler;level;capability;x;ty;body;pos}
 
 let transProg (A.Prog{node;decls;hls}) =
