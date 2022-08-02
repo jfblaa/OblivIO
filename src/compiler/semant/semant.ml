@@ -303,9 +303,10 @@ let transCmd ({err;_} as ctxt) =
     | WhileCmd{test;body} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
+      checkLowPC pc err pos;
       checkFlow testlvl L.bottom err pos;
-      let (body,cap') = trcmd pc C.empty body in
-      fromBase @@ WhileCmd{test;body}, cap'
+      let (body,_) = trcmd pc C.empty body in
+      fromBase @@ WhileCmd{test;body}, cap
     | OblivIfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
