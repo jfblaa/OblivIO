@@ -319,11 +319,11 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
   | A.ChannelDecl {channel;level;potential=P{cost;affords};ty;pos} ->
     H.add lambda channel (level,ty,cost);
     if cost < 0
-    then Err.error ctxt.err pos @@ "cost must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
+    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
     if affords < 0
-    then Err.error ctxt.err pos @@ "affordance must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
+    then Err.error ctxt.err pos @@ "affordance " ^ Int.to_string affords ^ " must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
     if cost <= affords && level <> L.bottom
-    then Err.error ctxt.err pos @@ "cost must be higher than affordance for non-public channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
+    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be higher than affordance " ^ Int.to_string affords ^ " for non-public channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
     ChannelDecl{channel;level;potential=P{cost;affords};ty;pos}
   | A.InputDecl{level;pos} ->
     begin
@@ -340,13 +340,11 @@ let transHl ctxt node (A.Hl{handler;level;potential=P{cost;affords};x;ty;body;po
   let hlchannel = Ch.Ch{node;handler} in
 
   if cost < 0
-  then Err.error ctxt.err pos @@ "cost must be non-negative for channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
-
-  if affords < 0
-  then Err.error ctxt.err pos @@ "affordance must be non-negative for channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
-
-  if cost <= affords && level <> L.bottom
-  then Err.error ctxt.err pos @@ "cost must be higher than affordance for non-public channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
+    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be non-negative for handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
+    if affords < 0
+    then Err.error ctxt.err pos @@ "affordance " ^ Int.to_string affords ^ " must be non-negative for handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
+    if cost <= affords && level <> L.bottom
+    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be higher than affordance " ^ Int.to_string affords ^ " for non-public handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
 
   if handler = "START" && level <> L.bottom
   then Err.error ctxt.err pos @@ "START channel must be public";

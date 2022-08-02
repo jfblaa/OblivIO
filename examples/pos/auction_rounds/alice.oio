@@ -1,6 +1,6 @@
 ALICE
 
-channel AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{};
+channel AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{} 1 -> 0;
 
 var max_bid : int@{H} = 432;
 

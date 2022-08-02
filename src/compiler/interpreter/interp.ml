@@ -25,7 +25,6 @@ type context =
   ; unsafe: bool
   ; message_queue: M.message sync_queue
   ; mutable input_buffer: char array
-  ; mutable mode: int list
   ; memory: (string, value) H.t
   ; store: (string, value) H.t
   ; handlers: (string, handler_info) H.t
@@ -416,41 +415,43 @@ and eval ctxt =
 exception Exit
 
 let interpCmd ctxt =
-  let mode =
-    match ctxt.mode with
-    | m::_ -> m
-    | [] -> raise @@ InterpFatal "getMode: stack empty" in
-  let rec _I (A.Cmd{cmd_base;pos} as cmd) =
+  let rec _I bitstack (A.Cmd{cmd_base;pos} as cmd) =
+    let bit =
+      match bitstack with
+      | b::_ -> b
+      | [] -> raise @@ InterpFatal "bitstack empty" in
     match cmd_base with
-    | SkipCmd -> ()
+    | SkipCmd -> bitstack
     | SeqCmd {c1;c2} ->
-      _I c1;
-      _I c2
+      _I (_I bitstack c1) c2
     | AssignCmd { var; exp } ->
       begin 
-      match mode with
+      match bit with
       | 0 -> ()
       | _ ->
         let v = eval ctxt exp in
         writevar ctxt ASSIGN v 1 var
-      end
+      end;
+      bitstack
     | BindCmd { var; exp } when ctxt.unsafe ->
       begin 
-        match mode with
+        match bit with
         | 0 -> ()
         | _ ->
           let v = eval ctxt exp in
           writevar ctxt ASSIGN v 1 var
-      end
+      end;
+      bitstack
     | BindCmd { var; exp } ->
       let v = eval ctxt exp in
-      writevar ctxt BIND v mode var;
+      writevar ctxt BIND v bit var;
+      bitstack
     | InputCmd { var; _ } when ctxt.unsafe ->
       let arr = ctxt.input_buffer in
       let len = Array.length arr in
       let blank = Array.make len '\000' in
       let j = ref 0 in
-      if (mode = 1) then (
+      if (bit = 1) then (
         begin
         try 
           for i = 0 to len-1 do
@@ -461,15 +462,16 @@ let interpCmd ctxt =
           done;
         with Unequal -> ();
         end;
-        writevar ctxt ASSIGN (StringVal{length=(!j);data=blank}) mode var;
+        writevar ctxt ASSIGN (StringVal{length=(!j);data=blank}) bit var;
       );
+      bitstack
     | InputCmd { var; size; _ } ->
       let ne = _int @@ eval ctxt size in
       let max_len = Array.length ctxt.input_buffer in
       let len = min ne max_len in
       let data = Array.sub ctxt.input_buffer 0 len in
       let updbit = Bool.to_int @@ (data.(0) <> '\000') in
-      let shouldBind = mode land updbit in
+      let shouldBind = bit land updbit in
       let str = StringVal{length=Array.length data;data} in
       writevar ctxt BIND str shouldBind var;
 
@@ -485,39 +487,41 @@ let interpCmd ctxt =
         | StringVal{data;_} ->
           ctxt.input_buffer <- data
         | _ -> raise @@ InterpFatal "InputCmd"
-      end
+      end;
+      bitstack
     | SendCmd { channel; exp } when ctxt.unsafe ->
-      let bit = mode in
       if (bit = 1) then (
         let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
         let lbit = M.Lbit{bit; level=bitlvl} in
         let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
         let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
         send ctxt msg
-      )
+      );
+      bitstack
     | SendCmd { channel; exp } ->
       let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
-      let lbit = M.Lbit{bit=mode; level=bitlvl} in
+      let lbit = M.Lbit{bit; level=bitlvl} in
       let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
       let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
-      send ctxt msg
+      send ctxt msg;
+      bitstack
     | IfCmd { test; thn; els } ->
       begin
       match eval ctxt test with
-      | IntVal 0 -> _I els
-      | _ -> _I thn
+      | IntVal 0 -> _I bitstack els
+      | _ -> _I bitstack thn
       end
     | WhileCmd { test; body } ->
       begin
       match eval ctxt test with
-      | IntVal 0 -> ()
-      | _ -> (_I body; _I cmd)
+      | IntVal 0 -> bitstack
+      | _ -> (_I (_I bitstack body) cmd)
       end
     | OblivIfCmd { test; thn; els } when ctxt.unsafe ->
       begin
       match eval ctxt test with
-      | IntVal 0 -> _I els
-      | _ -> _I thn
+      | IntVal 0 -> _I bitstack els
+      | _ -> _I bitstack thn
       end
     | OblivIfCmd { test; thn; els } ->
       let v = eval ctxt test in
@@ -525,26 +529,26 @@ let interpCmd ctxt =
         match v with
         | IntVal n -> Bool.to_int @@ (n <> 0)
         | _ -> 1 in
-      let mode = mode in
-      ctxt.mode <- i land mode :: (i lxor 1) land mode :: ctxt.mode;
       let (~>) cmd_base = A.Cmd{cmd_base;pos} in
-      _I thn;
-      _I (~> A.PopCmd);
-      _I els;
-      _I (~> A.PopCmd)
+      let (++) c1 c2 = ~> (A.SeqCmd{c1;c2}) in
+      let bitstack = i land bit :: (i lxor 1) land bit :: bitstack in
+      let c = thn ++ (~> A.PopCmd) ++ els ++ (~> A.PopCmd) in
+      _I bitstack c
     | PopCmd ->
       begin
-      match ctxt.mode with
-      | _::bits -> ctxt.mode <- bits
+      match bitstack with
       | [] -> raise @@ InterpFatal ("PopCmd: stack empty")
-      end
+      | _ -> ()
+      end;
+      bitstack
     | PrintCmd { info; exp } ->
       let v = eval ctxt exp in
       let intro =
         match info with
         | Some s -> s ^ ": "
         | None -> "" in
-      if mode = 1 then print_endline @@ intro ^ V.to_string v;
+      if bit = 1 then print_endline @@ intro ^ V.to_string v;
+      bitstack
     | ExitCmd ->
       send ctxt (M.Goodbye {sender=ctxt.name});
       raise Exit
@@ -565,8 +569,7 @@ let rec interp_loop ctxt () =
       match H.find_opt ctxt.handlers handler with
       | Some {x;body} ->
         H.add ctxt.memory x value;
-        ctxt.mode <- [bit];
-        interpCmd ctxt body;
+        let _ = interpCmd ctxt [bit] body in
         H.clear ctxt.memory;
       | None -> ()
     end
@@ -606,7 +609,6 @@ let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;hls}) =
       ; queue = Queue.create ()
       }
     ; input_buffer = Array.make 256 '\000'
-    ; mode = []
     ; memory = H.create 1024
     ; store = H.create 1024
     ; handlers = H.create 1024
