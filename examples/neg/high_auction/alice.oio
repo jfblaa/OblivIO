@@ -1,11 +1,11 @@
 ALICE
 
-channel AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{} [AUCTIONHOUSE/BID:1; ALICE/AUCTION_STATUS:1;BOB/AUCTION_STATUS:1;ALICE/AUCTION_OVER:1;BOB/AUCTION_OVER:1];
+channel AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{};
 
 var bid : int@{H} = 0;
 var max_bid : int@{H} = 432;
 
-AUCTION_STATUS@{H} (winning_bid : (string@{H}*int@{H})@{H}) [AUCTIONHOUSE/BID:1; ALICE/AUCTION_STATUS:1;BOB/AUCTION_STATUS:1;ALICE/AUCTION_OVER:1;BOB/AUCTION_OVER:1] {
+AUCTION_STATUS@{H} (winning_bid : (string@{H}*int@{H})@{H}) {
     oblif fst winning_bid != "Alice"
     then
         oblif snd winning_bid < max_bid 

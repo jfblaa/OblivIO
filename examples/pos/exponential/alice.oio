@@ -1,17 +1,17 @@
 ALICE
 
-channel BOB/B1@{H} : int@{H} [ALICE/A2: 2; BOB/B2: 4];
+channel BOB/B1@{H} : int@{H} 7 -> 6;
 
-channel BOB/B2@{H} : int@{H};
+channel BOB/B2@{H} : int@{H} 1 -> 0;
 
-A1@{H} (secret : int@{H}) [BOB/B1: 2; ALICE/A2: 4; BOB/B2: 8] {
+A1@{H} (secret : int@{H}) 15 -> 14 {
     oblif secret
     then send(BOB/B1, secret+1);
     else send(BOB/B1, secret-1);
 }
 
 
-A2@{H} (secret : int@{H}) [BOB/B2: 2] {
+A2@{H} (secret : int@{H}) 3 -> 2 {
     oblif secret
     then send(BOB/B2, secret+1);
     else send(BOB/B2, secret-1);

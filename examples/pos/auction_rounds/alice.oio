@@ -4,7 +4,7 @@ channel AUCTIONHOUSE/BID@{H} : (string@{}*int@{H})@{};
 
 var max_bid : int@{H} = 432;
 
-AUCTION_STATUS@{} (bid : (string@{H}*int@{H})@{H}) [AUCTIONHOUSE/BID: 1] {
+AUCTION_STATUS@{} (bid : (string@{H}*int@{H})@{H}) 0 -> 1 {
     oblif snd bid < max_bid && fst bid != "Alice"
     then send(AUCTIONHOUSE/BID, ("Alice", snd bid + 1));
     else skip;
