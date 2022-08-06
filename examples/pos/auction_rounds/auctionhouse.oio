@@ -3,10 +3,10 @@ AUCTIONHOUSE
 channel AUCTIONTIMER/BEGIN@{} : int@{};
 channel AUCTIONTIMER/EXIT@{} : int@{};
 
-channel ALICE/AUCTION_STATUS@{} : (string@{H}*int@{H})@{H} 0 -> 1;
-channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H} 0 -> 1;
+channel ALICE/AUCTION_STATUS@{} $1 : (string@{H}*int@{H})@{H};
+channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
-channel BOB/AUCTION_STATUS@{} : (string@{H}*int@{H})@{H} 0 -> 1;
+channel BOB/AUCTION_STATUS@{} $1 : (string@{H}*int@{H})@{H};
 channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
 var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
@@ -18,7 +18,7 @@ START@{} (i : int@{}) {
     send(AUCTIONTIMER/BEGIN, 1);
 }
 
-BID@{H} (bid : (string@{}*int@{H})@{}) 1 -> 0 {
+BID@{H} (bid : (string@{}*int@{H})@{}) {
     oblif snd winning_bid < snd bid
     then winning_bid ?= bid;
     else skip;

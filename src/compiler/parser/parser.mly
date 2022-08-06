@@ -13,7 +13,7 @@
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
-%token FST SND RIGHTARROW
+%token FST SND DOLLAR
 %token COLON SIZE AT PRINT EXIT 
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
 %token SKIP OBLIF SEND INPUT
@@ -148,20 +148,20 @@ channel:
 
 potential:
 | 
-  { P{cost=0;affords=0} }
-| cost=INT RIGHTARROW affords=INT
-  { P{cost;affords} }
+  { 0 }
+| DOLLAR p=INT
+  { p }
 
 decl:
 | VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
   { VarDecl {ty_opt; x; init; pos=$startpos} }
-| CHANNEL channel=channel AT level=lvl ty=type_anno potential=potential SEMICOLON
+| CHANNEL channel=channel AT level=lvl potential=potential ty=type_anno SEMICOLON
   { ChannelDecl {ty; level; channel; potential; pos=$startpos(channel)} }
 | INPUT AT level=lvl SEMICOLON
   { InputDecl {level; pos=$startpos} }
 
 handler:
-| handler=ID AT level=lvl LPAREN x=ID ty=type_anno RPAREN potential=potential LBRACE body=cmd_seq RBRACE
+| handler=ID AT level=lvl potential=potential LPAREN x=ID ty=type_anno RPAREN LBRACE body=cmd_seq RBRACE
   { Hl {handler;potential;x;ty;level;body;pos=$startpos(handler)} }
 
 (* Top-level *)

@@ -266,12 +266,17 @@ let transCmd ({err;_} as ctxt) =
       checkFlow pc chlvl err pos;
       checkAssignable ety chty err pos;
 
+      let r = match L.flows_to pc L.bottom, L.flows_to chlvl L.bottom with
+        | true, true -> 0
+        | true, false -> chq
+        | _ -> 1+chq in
+
       begin
-      if q < chq
-      then Err.error ctxt.err pos @@ "insufficient potential for sending on channel " ^ Ch.to_string channel ^ ", required: " ^ Int.to_string chq ^ ", remaining: " ^ Int.to_string q;
+      if q < r
+      then Err.error ctxt.err pos @@ "insufficient potential for sending on channel " ^ Ch.to_string channel ^ " under pc " ^ L.to_string pc ^ ", required: " ^ Int.to_string r ^ ", remaining: " ^ Int.to_string q;
       end;
 
-      fromBase @@ SendCmd{channel;exp=e}, max 0 (q - chq)
+      fromBase @@ SendCmd{channel;exp=e}, max 0 (q - r)
     | IfCmd{test;thn;els} ->
       let test,testty,testlvl = e_ty_lvl @@ transExp ctxt test in
       checkInt testty err pos;
@@ -316,15 +321,11 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
     | None -> H.add gamma x initty
     end;
     VarDecl{x;ty_opt;init;pos}
-  | A.ChannelDecl {channel;level;potential=P{cost;affords};ty;pos} ->
-    H.add lambda channel (level,ty,cost);
-    if cost < 0
-    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
-    if affords < 0
-    then Err.error ctxt.err pos @@ "affordance " ^ Int.to_string affords ^ " must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
-    if cost <= affords && level <> L.bottom
-    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be higher than affordance " ^ Int.to_string affords ^ " for non-public channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
-    ChannelDecl{channel;level;potential=P{cost;affords};ty;pos}
+  | A.ChannelDecl {channel;level;potential;ty;pos} ->
+    H.add lambda channel (level,ty,potential);
+    if potential < 0
+    then Err.error ctxt.err pos @@ "potential " ^ Int.to_string potential ^ " must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
+    ChannelDecl{channel;level;potential;ty;pos}
   | A.InputDecl{level;pos} ->
     begin
     match input with
@@ -333,28 +334,21 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
     end;
     InputDecl{level;pos}
 
-let transHl ctxt node (A.Hl{handler;level;potential=P{cost;affords};x;ty;body;pos}) =
+let transHl ctxt node (A.Hl{handler;level;potential;x;ty;body;pos}) =
   let ctxt = {ctxt with delta = H.create 1024} in
   H.add ctxt.delta x ty;
 
   let hlchannel = Ch.Ch{node;handler} in
 
-  if cost < 0
-    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be non-negative for handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
-    if affords < 0
-    then Err.error ctxt.err pos @@ "affordance " ^ Int.to_string affords ^ " must be non-negative for handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
-    if cost <= affords && level <> L.bottom
-    then Err.error ctxt.err pos @@ "cost " ^ Int.to_string cost ^ " must be higher than affordance " ^ Int.to_string affords ^ " for non-public handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
+  if potential < 0
+  then Err.error ctxt.err pos @@ "potential " ^ Int.to_string potential ^ " must be non-negative for handler channel " ^ Ch.to_string hlchannel ^ "@" ^ L.to_string level;
 
   if handler = "START" && level <> L.bottom
   then Err.error ctxt.err pos @@ "START channel must be public";
 
-  if handler = "START" && cost <> 0
-  then Err.error ctxt.err pos @@ "START channel must have cost 0";
+  let (body,_) = transCmd ctxt level potential body in
 
-  let (body,_) = transCmd ctxt level affords body in
-
-  Hl{handler;level;potential=P{cost;affords};x;ty;body;pos}
+  Hl{handler;level;potential;x;ty;body;pos}
 
 let transProg (A.Prog{node;decls;hls}) =
   let ctxt = 

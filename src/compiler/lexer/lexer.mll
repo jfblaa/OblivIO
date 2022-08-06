@@ -26,7 +26,6 @@ rule token = parse
 | '}'                 { RBRACE }
 | '['                 { LBRACK }
 | ']'                 { RBRACK }
-| "->"                { RIGHTARROW }
 | '+'                 { PLUS }
 | '-'                 { MINUS }
 | '*'                 { TIMES }
@@ -44,6 +43,7 @@ rule token = parse
 | "&&"                { AND }
 | "||"                { OR }
 | '@'                 { AT }
+| '$'                 { DOLLAR }
 | "="                 { ASSIGN }
 | "?="                { BIND }
 | "var"               { VAR }
