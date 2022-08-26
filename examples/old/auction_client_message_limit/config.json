@@ -1,5 +1,0 @@
-{
-    "clients": ["ALICE","BOB","AUCTIONHOUSE"],
-    "attacker": ["H"],
-    "granularity": 0.01
-}

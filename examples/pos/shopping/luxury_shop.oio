@@ -1,0 +1,33 @@
+DE_LUXES_UNIQUES
+
+channel BANK/TRANSFER@{} : (int@{H}*(int@{H}*int@{H})@{})@{};
+channel ALICE/OK@{H} : (string@{H}*int@{H})@{H};
+channel ALICE/ERROR@{H} : int@{H};
+
+var bank_id : int@{} = 4;
+
+var items : (string@{}*int@{})@{}[]@{} =
+    [   ("Necklace", 2200)
+    ;   ("Earrings", 1350)
+    ;   ("Perfume", 475)
+    ;   ("Handbag", 699)
+    ;   ("Fascinator", 978)
+    ;   ("Ring", 1450)
+    ];
+
+var order_buf : (string@{H}*int@{H})@{H} = ("",0);
+
+var requested_item_id : int@{H} = 0;
+var customer_bank_id : int@{H} = 0;
+
+ORDER@{} (order : (int@{H}*int@{H})@{}) {
+    order_buf = items[fst order];
+    send(BANK/TRANSFER,(snd order,(snd order_buf,bank_id)));
+}
+
+RESPONSE@{} $2 (code : int@{H}) {
+    oblif code == 0
+    then send(ALICE/OK,order_buf);
+    else send(ALICE/ERROR,code);
+}
+

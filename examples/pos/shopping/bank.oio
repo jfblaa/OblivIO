@@ -1,0 +1,28 @@
+BANK
+
+channel DE_LUXES_UNIQUES/RESPONSE@{} $2 : int@{H};
+
+var balance : int@{H}[]@{H} = [825;759;433;42;909];
+
+var from : int@{H} = 0;
+var amount : int@{H} = 0;
+var to : int@{H} = 0;
+var code : int@{H} = 0;
+
+TRANSFER@{}(msg : (int@{H}*(int@{H}*int@{H})@{})@{}) {
+    from = fst msg;
+    amount = fst snd msg;
+    to = snd snd msg;
+    code = 0;
+    
+    print("Balance",balance);
+    oblif amount <= balance[from]
+    then {
+        balance[from] ?= balance[from] - amount;
+        balance[to] ?= balance[to] + amount;
+    }
+    else code ?= 200;
+
+    send(DE_LUXES_UNIQUES/RESPONSE,code);
+    print("Balance",balance);
+}

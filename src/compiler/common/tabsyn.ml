@@ -37,7 +37,7 @@ and cmd_base
   | SeqCmd of { c1: cmd; c2: cmd }
   | AssignCmd of { var: var; exp: exp }
   | BindCmd of { var: var; exp: exp }
-  | InputCmd of { var: var; size: exp }
+  | InputCmd of { var: var; size: int }
   | SendCmd of { channel: Ch.channel; exp: exp }
   | IfCmd of { test: exp; thn: cmd; els: cmd }
   | WhileCmd of { test: exp; body: cmd }

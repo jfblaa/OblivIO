@@ -466,9 +466,8 @@ let interpCmd ctxt =
       );
       bitstack
     | InputCmd { var; size; _ } ->
-      let ne = _int @@ eval ctxt size in
       let max_len = Array.length ctxt.input_buffer in
-      let len = min ne max_len in
+      let len = min size max_len in
       let data = Array.sub ctxt.input_buffer 0 len in
       let updbit = Bool.to_int @@ (data.(0) <> '\000') in
       let shouldBind = bit land updbit in
@@ -538,9 +537,8 @@ let interpCmd ctxt =
       begin
       match bitstack with
       | [] -> raise @@ InterpFatal ("PopCmd: stack empty")
-      | _ -> ()
-      end;
-      bitstack
+      | _ :: bitstack' -> bitstack'
+      end
     | PrintCmd { info; exp } ->
       let v = eval ctxt exp in
       let intro =
