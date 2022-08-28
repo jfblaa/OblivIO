@@ -3,11 +3,11 @@ AUCTIONHOUSE
 channel AUCTIONTIMER/BEGIN@{} : int@{};
 channel AUCTIONTIMER/EXIT@{} : int@{};
 
-channel ALICE/AUCTION_STATUS@{H} $1 : int@{H};
+channel ALICE/TO_LEAD@{H} $1 : int@{H};
 channel ALICE/AUCTION_OVER_NAME@{} : string@{H};
 channel ALICE/AUCTION_OVER_BID@{} : int@{H};
 
-channel BOB/AUCTION_STATUS@{H} $1 : int@{H};
+channel BOB/TO_LEAD@{H} $1 : int@{H};
 channel BOB/AUCTION_OVER_NAME@{} : string@{H};
 channel BOB/AUCTION_OVER_BID@{} : int@{H};
 
@@ -16,8 +16,8 @@ var winning_bid : int@{H} = 0;
 var round_counter : int@{} = 500;
 
 START@{} (i : int@{}) {
-    send(ALICE/AUCTION_STATUS, winning_bid);
-    send(BOB/AUCTION_STATUS, winning_bid);
+    send(ALICE/TO_LEAD, 1);
+    send(BOB/TO_LEAD, 1);
     send(AUCTIONTIMER/BEGIN, 1);
 }
 
@@ -43,11 +43,11 @@ TICK@{} $4 (dmy: int@{}) {
     if round_counter > 0
     then {
         oblif winner != "Alice"
-        then send(ALICE/AUCTION_STATUS, winning_bid);
+        then send(ALICE/TO_LEAD, winning_bid+1);
         else skip;
 
         oblif winner != "Bob"
-        then send(BOB/AUCTION_STATUS, winning_bid);
+        then send(BOB/TO_LEAD, winning_bid+1);
         else skip;
 
         round_counter = round_counter - 1;

@@ -254,8 +254,11 @@ let transCmd ({err;_} as ctxt) =
       fromBase @@ BindCmd{var;exp=e}, q
     | InputCmd {var;size} ->
       let var,varty = v_ty @@ transVar ctxt var in
+      let size,ety,elvl = e_ty_lvl @@ transExp ctxt size in
       let chlvl = lookupInternal ctxt pos in
-      checkAssignable (Ty.Type{base=Ty.STRING;level=L.lub chlvl pc}) varty err pos;
+      checkInt ety err pos;
+      checkFlow (L.lub pc elvl) chlvl err pos;
+      checkAssignable (Ty.Type{base=Ty.STRING;level=chlvl}) varty err pos;
       fromBase @@ InputCmd{var;size}, q
     | SendCmd {channel;exp} ->
       let (chlvl,chty,chq) = lookupRemote ctxt channel pos in

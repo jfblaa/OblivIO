@@ -107,7 +107,7 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=exp DO body=cmd
   { WhileCmd{test; body} }
-| v=var BIND INPUT LPAREN size=INT RPAREN SEMICOLON
+| v=var BIND INPUT LPAREN size=exp RPAREN SEMICOLON
   { InputCmd {var=v;size} }
 | SEND LPAREN channel=channel COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{channel;exp} }

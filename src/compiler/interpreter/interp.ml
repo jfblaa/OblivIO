@@ -467,7 +467,8 @@ let interpCmd ctxt =
       bitstack
     | InputCmd { var; size; _ } ->
       let max_len = Array.length ctxt.input_buffer in
-      let len = min size max_len in
+      let n = _int @@ eval ctxt size in
+      let len = min n max_len in
       let data = Array.sub ctxt.input_buffer 0 len in
       let updbit = Bool.to_int @@ (data.(0) <> '\000') in
       let shouldBind = bit land updbit in

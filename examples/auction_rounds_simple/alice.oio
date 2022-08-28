@@ -4,9 +4,9 @@ channel AUCTIONHOUSE/ALICE_BID@{H} : int@{H};
 
 var max_bid : int@{H} = 432;
 
-AUCTION_STATUS@{H} $1 (bid : int@{H}) {
-    oblif bid < max_bid
-    then send(AUCTIONHOUSE/ALICE_BID, bid + 1);
+TO_LEAD@{H} $1 (bid : int@{H}) {
+    oblif bid <= max_bid
+    then send(AUCTIONHOUSE/ALICE_BID, bid);
     else skip;
 }
 
