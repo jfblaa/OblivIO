@@ -18,7 +18,7 @@ START@{} (i : int@{}) {
     send(AUCTIONTIMER/BEGIN, 1);
 }
 
-BID@{H} (bid : (string@{}*int@{H})@{}) {
+BID@{H} (bid: (string@{}*int@{H})@{}) {
     oblif snd winning_bid < snd bid
     then winning_bid ?= bid;
     else skip;

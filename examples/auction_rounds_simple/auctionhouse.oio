@@ -1,0 +1,65 @@
+AUCTIONHOUSE
+
+channel AUCTIONTIMER/BEGIN@{} : int@{};
+channel AUCTIONTIMER/EXIT@{} : int@{};
+
+channel ALICE/AUCTION_STATUS@{H} $1 : int@{H};
+channel ALICE/AUCTION_OVER_NAME@{} : string@{H};
+channel ALICE/AUCTION_OVER_BID@{} : int@{H};
+
+channel BOB/AUCTION_STATUS@{H} $1 : int@{H};
+channel BOB/AUCTION_OVER_NAME@{} : string@{H};
+channel BOB/AUCTION_OVER_BID@{} : int@{H};
+
+var winner : string@{H} = "";
+var winning_bid : int@{H} = 0;
+var round_counter : int@{} = 500;
+
+START@{} (i : int@{}) {
+    send(ALICE/AUCTION_STATUS, winning_bid);
+    send(BOB/AUCTION_STATUS, winning_bid);
+    send(AUCTIONTIMER/BEGIN, 1);
+}
+
+ALICE_BID@{H} (bid: int@{H}) {
+    oblif winning_bid < bid
+    then {
+        winner ?= "Alice";
+        winning_bid ?= bid;
+    }
+    else skip;
+}
+
+BOB_BID@{H} (bid: int@{H}) {
+    oblif winning_bid < bid
+    then {
+        winner ?= "Bob";
+        winning_bid ?= bid;
+    }
+    else skip;
+}
+
+TICK@{} $4 (dmy: int@{}) {
+    if round_counter > 0
+    then {
+        oblif winner != "Alice"
+        then send(ALICE/AUCTION_STATUS, winning_bid);
+        else skip;
+
+        oblif winner != "Bob"
+        then send(BOB/AUCTION_STATUS, winning_bid);
+        else skip;
+
+        round_counter = round_counter - 1;
+        send(AUCTIONTIMER/BEGIN, 1);
+    } else {
+        send(ALICE/AUCTION_OVER_NAME,winner);
+        send(ALICE/AUCTION_OVER_BID,winning_bid);
+
+        send(BOB/AUCTION_OVER_NAME,winner);
+        send(BOB/AUCTION_OVER_BID,winning_bid);
+
+        send(AUCTIONTIMER/EXIT, 0);
+        exit();
+    }
+}

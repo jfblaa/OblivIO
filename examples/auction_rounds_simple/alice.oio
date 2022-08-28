@@ -1,0 +1,20 @@
+ALICE
+
+channel AUCTIONHOUSE/ALICE_BID@{H} : int@{H};
+
+var max_bid : int@{H} = 432;
+
+AUCTION_STATUS@{H} $1 (bid : int@{H}) {
+    oblif bid < max_bid
+    then send(AUCTIONHOUSE/ALICE_BID, bid + 1);
+    else skip;
+}
+
+AUCTION_OVER_NAME@{} (winner : string@{H}) {
+    print("Auction won by", winner);
+}
+
+AUCTION_OVER_BID@{} (winning_bid : int@{H}) {
+    print("Winning bid was", winning_bid);
+    exit();
+}
