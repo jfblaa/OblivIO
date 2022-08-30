@@ -233,8 +233,6 @@ let op oper v1 v2 =
     IntVal (a-b)
   | TimesOp, IntVal a, IntVal b ->
     IntVal (a*b)
-  | DivideOp, IntVal a, IntVal b ->
-    IntVal (safeDiv a b)
   (* STRING *)
   | CaretOp, StringVal {length=l1;data=d1}, StringVal {length=l2;data=d2} ->
     StringVal {length=l1+l2; data=safeConcat d1 d2}
@@ -266,8 +264,6 @@ let op_unsafe oper v1 v2 =
     IntVal (a-b)
   | TimesOp, IntVal a, IntVal b ->
     IntVal (a*b)
-  | DivideOp, IntVal a, IntVal b ->
-    IntVal (a / b)
   (* STRING *)
   | CaretOp, StringVal {length=l1;data=d1}, StringVal {length=l2;data=d2} ->
     let d1' = Array.sub d1 0 l1 in

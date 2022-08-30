@@ -42,7 +42,6 @@
 | PLUS    { PlusOp }
 | MINUS   { MinusOp }
 | TIMES   { TimesOp }
-| DIVIDE  { DivideOp }
 | AND     { AndOp }
 | OR      { OrOp }
 | EQ      { EqOp }

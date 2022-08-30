@@ -144,7 +144,7 @@ let rec transExp ({err;_} as ctxt) =
       let level = L.lub (Ty.level lty) (Ty.level rty) in
       let base =
         match oper with
-        | PlusOp | MinusOp | TimesOp | DivideOp | LtOp | LeOp | GtOp | GeOp | AndOp |OrOp ->
+        | PlusOp | MinusOp | TimesOp  | LtOp | LeOp | GtOp | GeOp | AndOp |OrOp ->
           checkInt lty err pos;
           checkInt rty err pos;
           Ty.INT
