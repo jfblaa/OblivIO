@@ -1,5 +1,7 @@
 module M = Common.Message
 module C = Common.Channel
+module L = Common.Level
+module Ty = Common.Types
 module H = Hashtbl
 
 module ST = Set.Make(String)
@@ -80,9 +82,9 @@ let start json_file =
         if ST.is_empty !clients then (
           let open Common.Value in
           let lbit = M.Lbit{bit=1;level=Common.Level.bottom} in
-          let lvalue = M.Lval{value=IntVal 0;level=Common.Level.bottom} in
+          let tvalue = M.TypedVal{value=IntVal 0;ty=Ty.Type{base=Ty.INT;level=L.bottom}} in
           H.iter (fun node ch ->
-            let msg = M.Relay{sender="OBLIVIO";channel=C.Ch{node;handler="START"};lbit;lvalue} in
+            let msg = M.Relay{sender="OBLIVIO";channel=C.Ch{node;handler="START"};lbit;tvalue} in
             output_value ch msg;
             flush ch
           ) routing_table;
@@ -105,7 +107,7 @@ let start json_file =
         if (H.length routing_table == 0)
         then exit 0
       | M.Relay {channel=C.Ch{node;_};_} as msg ->
-        let msgstr = M.to_string ~lvlOpt:(Some advlevel) msg ^ "\n" in
+        let msgstr = M.to_string ~ladv:advlevel msg ^ "\n" in
         log msgstr;
         match H.find_opt routing_table node with
         | Some ch -> 

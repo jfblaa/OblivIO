@@ -308,18 +308,13 @@ let transCmd ({err;_} as ctxt) =
 
 let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
   match dec with
-  | A.VarDecl {ty_opt;x;init;pos} ->
+  | A.VarDecl {ty;x;init;pos} ->
     if H.mem gamma x
     then Err.error err pos @@ "variable " ^ x ^ " already declared";
     let init,initty = e_ty @@ transExp ctxt init in
-    begin
-    match ty_opt with
-    | Some ty ->
-      H.add gamma x ty;
-      checkAssignable initty ty err pos;
-    | None -> H.add gamma x initty
-    end;
-    VarDecl{x;ty_opt;init;pos}
+    H.add gamma x ty;
+    checkAssignable initty ty err pos;
+    VarDecl{x;ty;init;pos}
   | A.ChannelDecl {channel;level;potential;ty;pos} ->
     H.add lambda channel (level,ty,potential);
     if potential < 0

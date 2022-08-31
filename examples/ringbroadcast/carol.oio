@@ -1,0 +1,23 @@
+CAROL
+
+input@{H};
+channel ALICE/RCV@{} : (string@{H}*string@{H})@{H};
+
+var my_msg : string@{H} = "";
+var msg_out : (string@{H}*string@{H})@{H} = ("","");
+
+RCV@{} (msg_in: (string@{H}*string@{H})@{H}) {
+    oblif fst msg_in == "" || fst msg_in == "Carol"
+    then {
+        my_msg ?= input(64);
+        oblif my_msg != ""
+        then msg_out ?= ("Carol", my_msg);
+        else msg_out ?= ("","");
+        my_msg ?= "";
+    } else {
+        print(fst msg_in ^ ": " ^ snd msg_in);
+        msg_out ?= msg_in;
+    }
+    
+    send(ALICE/RCV, msg_out);
+}

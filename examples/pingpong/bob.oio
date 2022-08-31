@@ -1,0 +1,8 @@
+BOB
+
+channel ALICE/PING@{} : int@{H};
+
+PONG@{} (x: int@{H}) {
+  print("Received", x);
+  send(ALICE/PING,x+1);
+}

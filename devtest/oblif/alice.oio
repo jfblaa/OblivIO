@@ -1,0 +1,11 @@
+ALICE
+
+var secret : (string@{H}*string@{H})@{H} = ("Hi","Hi");
+var msg : (string@{H}*string@{H})@{H} = ("","");
+
+START@{} (i: int@{}) {
+    oblif secret != ("Hi","Hi")
+    then msg ?= ("Hello","ABCDEFG");
+    else msg ?= ("Goodbye","123");
+    print(msg);
+}

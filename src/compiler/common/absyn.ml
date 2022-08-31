@@ -7,7 +7,7 @@ include Oper
 
 type program = Prog of { node: string; decls: decl list; hls: hl list }
 and decl
-  = VarDecl of { ty_opt: T.ty option; x: string; init: exp; pos: pos }
+  = VarDecl of { ty: T.ty; x: string; init: exp; pos: pos }
   | ChannelDecl of { channel: Ch.channel; level: L.level; potential: int; ty: T.ty; pos: pos }
   | InputDecl of { level: L.level; pos: pos }
 and hl

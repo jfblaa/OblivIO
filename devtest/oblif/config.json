@@ -1,0 +1,5 @@
+{
+    "clients": ["ALICE"],
+    "attacker": [],
+    "granularity": 0.01
+}

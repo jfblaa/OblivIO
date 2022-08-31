@@ -28,7 +28,7 @@ type context =
   ; memory: (string, value) H.t
   ; store: (string, value) H.t
   ; handlers: (string, handler_info) H.t
-  ; trust_map: (C.channel, L.level * L.level) H.t
+  ; trust_map: (C.channel, L.level * Ty.ty) H.t
   ; server: server_info
   ; trace: Tr.trace
   }
@@ -73,21 +73,23 @@ let _string = function
   | StringVal{data;_} -> data |> Array.to_seq |> String.of_seq
   | _ -> raise @@ InterpFatal "_I"
 
-let safeConcat (arr1 : char array) (arr2 : char array) =
+(* TODO: THIS IS WRONG! NOT GUARANTEED TO HAVE ZEROED OUT CHAR ARRAY! *)
+let safeConcat l (arr1 : char array) (arr2 : char array) =
   let l1 = Array.length arr1 in
   let l2 = Array.length arr2 in
   let len = l1 + l2 in
   let res = Array.make len '\000' in
-  let idx = ref 0 in
   let c = ref 0 in
   for i = 0 to len-1 do
-    if i < l1
-    then c := Char.code @@ arr1.(i);
+    for j = 0 to l1-1 do
+      let v = Char.code @@ arr1.(j) in
+      let b = Bool.to_int (i = j) land Bool.to_int (j < l) in
+      c := !c lor (v*b)
+    done;
     for j = 0 to l2-1 do
       let v = Char.code @@ arr2.(j) in
-      let c' = Bool.to_int (j = !idx) land Bool.to_int (!c = 0) in
-      idx := !idx + Bool.to_int (c' <> 0);
-      c := !c lor (v*c')
+      let b = Bool.to_int (i = j+l) in
+      c := !c lor (v*b)
     done;
     res.(i) <- Char.chr !c;
     c := 0
@@ -235,7 +237,7 @@ let op oper v1 v2 =
     IntVal (a*b)
   (* STRING *)
   | CaretOp, StringVal {length=l1;data=d1}, StringVal {length=l2;data=d2} ->
-    StringVal {length=l1+l2; data=safeConcat d1 d2}
+    StringVal {length=l1+l2; data=safeConcat l1 d1 d2}
   | _ -> raise @@ NotImplemented (V.to_string v1 ^ to_string oper ^ V.to_string v2)
 
 let op_unsafe oper v1 v2 =
@@ -487,18 +489,18 @@ let interpCmd ctxt =
       bitstack
     | SendCmd { channel; exp } when ctxt.unsafe ->
       if (bit = 1) then (
-        let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
+        let (bitlvl,ty) = lookup ctxt.trust_map channel in
         let lbit = M.Lbit{bit; level=bitlvl} in
-        let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
-        let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
+        let tvalue = M.TypedVal{value=eval ctxt exp; ty} in
+        let msg = M.Relay{sender=ctxt.name;channel;lbit;tvalue} in
         send ctxt msg
       );
       bitstack
     | SendCmd { channel; exp } ->
-      let (bitlvl,valuelvl) = lookup ctxt.trust_map channel in
+      let (bitlvl,ty) = lookup ctxt.trust_map channel in
       let lbit = M.Lbit{bit; level=bitlvl} in
-      let lvalue = M.Lval{value=eval ctxt exp; level=valuelvl} in
-      let msg = M.Relay{sender=ctxt.name;channel;lbit;lvalue} in
+      let tvalue = M.TypedVal{value=eval ctxt exp; ty} in
+      let msg = M.Relay{sender=ctxt.name;channel;lbit;tvalue} in
       send ctxt msg;
       bitstack
     | IfCmd { test; thn; els } ->
@@ -557,7 +559,7 @@ let rec interp_loop ctxt () =
     ()
   | Some (M.Relay{lbit=M.Lbit{bit=0;level};_}) when L.flows_to level L.bottom  ->
     ()
-  | Some (M.Relay{sender;channel=C.Ch{handler;_};lbit=M.Lbit{bit;_};lvalue=M.Lval{value;_};_} as msg) ->
+  | Some (M.Relay{sender;channel=C.Ch{handler;_};lbit=M.Lbit{bit;_};tvalue=M.TypedVal{value;_};_} as msg) ->
     if (not @@ String.equal sender ctxt.name)
     then Tr.add_receive (Sys.time()) msg ctxt.trace;
     begin
@@ -620,8 +622,7 @@ let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;hls}) =
     | (A.InputDecl _) ->
       ()
     | (A.ChannelDecl{channel;ty;level;_}) ->
-      let tylvl = Ty.level ty in
-      H.add ctxt.trust_map channel (level,tylvl) in
+      H.add ctxt.trust_map channel (level,ty) in
   
   List.iter f hls;
   List.iter g decls;

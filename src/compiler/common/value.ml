@@ -21,7 +21,7 @@ let rec to_string = function
       data |> Array.to_list
            |> Util.take length
            |> List.map to_string
-           |> String.concat "," in
+           |> String.concat ";" in
     "[" ^ datastr ^ "]"
 
 let rec size = function 

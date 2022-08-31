@@ -80,7 +80,7 @@ exp_base:
 | SND exp=exp       { ProjExp {proj=Snd; exp} }
 | pair=paren(spair(exp,COMMA,exp))
   { PairExp pair }
-| arr=brack(separated_nonempty_list(SEMICOLON,exp))
+| arr=brack(slist(SEMICOLON,exp))
   { ArrayExp arr }
 
 exp:
@@ -152,8 +152,8 @@ potential:
   { p }
 
 decl:
-| VAR x=ID ty_opt=ioption(type_anno) ASSIGN init=exp SEMICOLON
-  { VarDecl {ty_opt; x; init; pos=$startpos} }
+| VAR x=ID ty=type_anno ASSIGN init=exp SEMICOLON
+  { VarDecl {ty; x; init; pos=$startpos} }
 | CHANNEL channel=channel AT level=lvl potential=potential ty=type_anno SEMICOLON
   { ChannelDecl {ty; level; channel; potential; pos=$startpos(channel)} }
 | INPUT AT level=lvl SEMICOLON

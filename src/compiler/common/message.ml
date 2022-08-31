@@ -1,48 +1,65 @@
 module V = Value
 module L = Level
 module C = Channel
+module T = Types
 
 type message
-  = Relay of {sender: string; channel: C.channel; lbit: lbit; lvalue: lvalue}
+  = Relay of {sender: string; channel: C.channel; lbit: lbit; tvalue: tvalue}
   | Greet of {sender: string}
   | Goodbye of {sender: string}
 and lbit
   = Lbit of {bit: int; level: L.level}
-and lvalue
-  = Lval of {value: V.value; level: L.level}
+and tvalue
+  = TypedVal of {value: V.value; ty: T.ty}
 
-let bitAux (Lbit{bit;level}) lvlOpt =
-  match lvlOpt with
-  | Some lvl when not (L.flows_to level lvl) -> "?"
-  | _ -> Int.to_string bit
+let bitAux ladv (Lbit{bit;level}) =
+  if (L.flows_to level ladv)
+  then Int.to_string bit
+  else  "?"
 
-let valueAux (Lval{value;level}) lvlOpt =
-  match lvlOpt with
-  | Some lvl when not (L.flows_to level lvl) -> "?"
-  | _ -> V.to_string value
+let rec valueAux ladv (TypedVal{value;ty}) =
+  match value,ty with
+  | IntVal _, T.Type{base=INT;level} when L.flows_to level ladv -> V.to_string value
+  | StringVal _, T.Type{base=STRING;level} when L.flows_to level ladv -> V.to_string value
+  | PairVal (a,b), T.Type{base=PAIR (at,bt);level} when L.flows_to level ladv ->
+    String.concat "" [
+      "("
+    ; valueAux ladv (TypedVal{value=a;ty=at})
+    ; ","
+    ; valueAux ladv (TypedVal{value=b;ty=bt})
+    ; ")"
+    ]
+  | ArrayVal {length;data}, T.Type{base=ARRAY ty;level} when L.flows_to level ladv ->
+    let datastr =
+      data |> Array.to_list
+           |> Util.take length
+           |> List.map (fun value -> TypedVal{value;ty})
+           |> List.map (valueAux ladv)
+           |> String.concat ";" in
+    "[" ^ datastr ^ "]"
+  | _ -> "?"
 
-
-let sizeOfLvalue (Lval{value;_}) =
+let sizeOfLvalue (TypedVal{value;_}) =
   V.size value
 
 let sizeOfMsgValue = function
-  | Relay {lvalue;_} ->
-    sizeOfLvalue lvalue
+  | Relay {tvalue;_} ->
+    sizeOfLvalue tvalue
   | _ -> 0
 
-let to_string ?(lvlOpt=None) msg =
+let to_string ?(ladv=L.bottom) msg =
   match msg with
-  | Relay {sender;channel;lbit;lvalue;_} ->
+  | Relay {sender;channel;lbit;tvalue;_} ->
     String.concat ""
     [ sender
     ; "->"
     ; C.to_string channel
     ; " {"
-    ; bitAux lbit lvlOpt
+    ; bitAux ladv lbit
     ; ","
-    ; valueAux lvalue lvlOpt
+    ; valueAux ladv tvalue
     ; "} ("
-    ; Int.to_string @@ sizeOfLvalue lvalue
+    ; Int.to_string @@ sizeOfLvalue tvalue
     ; " bytes)"
     ]
   | Greet {sender} -> "init: " ^ sender

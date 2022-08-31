@@ -1,0 +1,16 @@
+BOB
+
+input@{H};
+channel ALICE/CHAT@{}: string@{H};
+
+var msg_out: string@{H} = "";
+
+CHAT@{} (msg_in: string@{H}) {
+    oblif msg_in != ""
+    then print("Alice says",msg_in);
+    else skip;
+    
+    msg_out ?= input(32);
+    send(ALICE/CHAT,msg_out);
+    msg_out = "";
+}

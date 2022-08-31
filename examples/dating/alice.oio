@@ -1,0 +1,61 @@
+ALICE
+
+var min_age : int@{H} = 25;
+var max_age : int@{H} = 35;
+var condition : string@{H} = "cats";
+
+var name_buffer : string@{H} = "";
+var age_buffer : int@{H} = 0;
+var n_interests_buffer : int@{} = 0;
+var interests_buffer : string@{H}[]@{H} = [""];
+
+var result : string@{H} = "";
+var score : int@{H} = 0;
+var counter : int@{} = 0;
+
+var match_message : string@{H} = "Hi, you seem cool!";
+channel BOB/MATCH@{H} : string@{H};
+
+START@{} (dmy: int@{H}) {
+  oblif dmy
+  then {
+    condition ?= "VERY, VERY, VERY LONG STRING THAT IS JUST FOR PADDING AS DMY=0";
+    match_message ?= "VERY, VERY, VERY LONG STRING THAT IS JUST FOR PADDING AS DMY=0";
+  }
+  else skip;
+}
+
+ASK@{} $1 (profile: (string@{H}*(int@{H}*(int@{}*string@{H}[]@{H})@{})@{})@{}) {
+  name_buffer = fst profile;
+  age_buffer = fst snd profile;
+  n_interests_buffer = fst snd snd profile;
+  interests_buffer = snd snd snd profile;
+
+  oblif min_age <= age_buffer && age_buffer <= max_age
+  then score ?= score + 1;
+  else skip;
+  
+  while counter < n_interests_buffer
+  do {
+    oblif interests_buffer[counter] == condition
+    then score ?= score + 1;
+    else skip;
+    counter = counter + 1;
+  }
+  counter = 0;
+
+  oblif score >= 2
+  then {
+    print("Match found", name_buffer);
+    print("Age", age_buffer);
+    print("Interests", interests_buffer);
+    send(BOB/MATCH, match_message);
+  }
+  else skip;
+
+  name_buffer = "";
+  age_buffer = 0;
+  n_interests_buffer = 0;
+  interests_buffer = [""];
+  score = 0;
+}
