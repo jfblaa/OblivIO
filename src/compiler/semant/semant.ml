@@ -14,7 +14,7 @@ type context
   = { gamma: (string, Ty.ty) H.t
     ; lambda: (Ch.channel, (L.level * Ty.ty * int)) H.t
     ; delta: (string, Ty.ty) H.t
-    ; mutable input: L.level option
+    ; pi: (string, Ty.ty) H.t
     ; err:  Err.errorenv 
     }
 ;;
@@ -41,10 +41,10 @@ let lookupVar ({gamma;delta;err;_}) v pos =
     | Some ty -> STORE, ty
     | None -> LOCAL, errTy err pos @@ "undeclared variable " ^ v
 
-let lookupInternal ({input;err;_}) pos = 
-    match input with
-    | Some level -> level
-    | None -> errLvl err pos @@ "undeclared internal channel"
+let lookupInternal ({pi;err;_}) ch pos = 
+    match H.find_opt pi ch with
+    | Some ty -> ty
+    | None -> errTy err pos @@ "undeclared internal channel"
 
 let lookupRemote ({lambda;err;_}) ch pos = 
   match H.find_opt lambda ch with
@@ -252,14 +252,31 @@ let transCmd ({err;_} as ctxt) =
       end;
       checkAssignable (raiseTo ety pc) varty err pos;
       fromBase @@ BindCmd{var;exp=e}, q
-    | InputCmd {var;size} ->
-      let var,varty = v_ty @@ transVar ctxt var in
+    | InputCmd {var;ch;size} ->
+      let var,varty,varloc = v_ty_loc @@ transVar ctxt var in
       let size,ety,elvl = e_ty_lvl @@ transExp ctxt size in
-      let chlvl = lookupInternal ctxt pos in
+      let chty = lookupInternal ctxt ch pos in
       checkInt ety err pos;
-      checkFlow (L.lub pc elvl) chlvl err pos;
-      checkAssignable (Ty.Type{base=Ty.STRING;level=chlvl}) varty err pos;
-      fromBase @@ InputCmd{var;size}, q
+      begin
+        match varloc with
+        | LOCAL ->
+          Err.error err pos @@ "handler variable " ^ varname var ^ " is read-only";
+        | STORE -> 
+          begin 
+            match T.base chty with
+            | T.STRING -> ()
+            | _ -> Err.error err pos @@ "input command expected channel with type string, channel " ^ ch ^ " has type " ^ T.to_string chty;
+          end;
+          let l = L.lub pc elvl in
+          checkFlow l (T.level chty) err pos;
+          checkAssignable (T.raiseTo chty l) varty err pos;
+      end;
+      fromBase @@ InputCmd{var;ch;size}, q
+    | OutputCmd {ch;exp} ->
+      let exp,ety = e_ty @@ transExp ctxt exp in
+      let chty = lookupInternal ctxt ch pos in
+      checkAssignable (T.raiseTo ety pc) chty err pos;
+      fromBase @@ OutputCmd{ch;exp}, q
     | SendCmd {channel;exp} ->
       let (chlvl,chty,chq) = lookupRemote ctxt channel pos in
       let e,ety = e_ty @@ transExp ctxt exp in
@@ -298,15 +315,12 @@ let transCmd ({err;_} as ctxt) =
       if L.flows_to testlvl L.bottom
       then Err.error err pos @@ "test for oblif is labelled public";
       fromBase @@ OblivIfCmd{test;thn;els}, q''
-    | PrintCmd {info;exp} ->
-      let exp = transExp ctxt exp in
-      fromBase @@ PrintCmd{info;exp}, q
     | ExitCmd -> 
       checkLowPC pc err pos;
       fromBase ExitCmd, q
   in trcmd
 
-let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
+let transDecl ({gamma;lambda;pi;err;_} as ctxt: context) dec =
   match dec with
   | A.VarDecl {ty;x;init;pos} ->
     if H.mem gamma x
@@ -315,18 +329,18 @@ let transDecl ({gamma;lambda;input;err;_} as ctxt: context) dec =
     H.add gamma x ty;
     checkAssignable initty ty err pos;
     VarDecl{x;ty;init;pos}
-  | A.ChannelDecl {channel;level;potential;ty;pos} ->
+  | A.NetworkChannelDecl {channel;level;potential;ty;pos} ->
+    if H.mem lambda channel
+    then Err.error err pos @@ "network channel " ^ Ch.to_string channel ^ " already declared";
     H.add lambda channel (level,ty,potential);
     if potential < 0
     then Err.error ctxt.err pos @@ "potential " ^ Int.to_string potential ^ " must be non-negative for channel " ^ Ch.to_string channel ^ "@" ^ L.to_string level;
-    ChannelDecl{channel;level;potential;ty;pos}
-  | A.InputDecl{level;pos} ->
-    begin
-    match input with
-    | Some _ -> Err.error err pos @@ "input channel already declared"
-    | None -> ctxt.input <- Some level
-    end;
-    InputDecl{level;pos}
+    NetworkChannelDecl{channel;level;potential;ty;pos}
+  | A.LocalChannelDecl{ch;ty;pos} ->
+    if H.mem pi ch
+    then Err.error err pos @@ "internal channel " ^ ch ^ " already declared";
+    H.add pi ch ty;
+    LocalChannelDecl{ch;ty;pos}
 
 let transHl ctxt node (A.Hl{handler;level;potential;x;ty;body;pos}) =
   let ctxt = {ctxt with delta = H.create 1024} in
@@ -349,7 +363,7 @@ let transProg (A.Prog{node;decls;hls}) =
     { gamma = H.create 1024
     ; lambda = H.create 1024
     ; delta = H.create 0
-    ; input = None
+    ; pi = H.create 1024
     ; err = Err.initial_env
     } in
   let decls = List.map (transDecl ctxt) decls in

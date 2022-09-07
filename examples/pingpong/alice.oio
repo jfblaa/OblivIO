@@ -1,12 +1,13 @@
 ALICE
 
-channel BOB/PONG@{} : int@{H};
+network channel BOB/PONG@{} : int@{H};
+local channel STDOUT: int@{H};
 
 START@{} (x: int@{H}) {
   send(BOB/PONG,x);
 }
 
 PING@{} (x: int@{H}) {
-  print("Received", x);
+  output(STDOUT, x);
   send(BOB/PONG,x+1);
 }

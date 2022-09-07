@@ -1,12 +1,13 @@
 BOB
 
-channel ALICE/NAME@{} : string@{H};
-channel ALICE/ASK@{} $1 : (string@{H}*(int@{H}*(int@{}*string@{H}[]@{H})@{})@{})@{};
+network channel ALICE/NAME@{} : string@{H};
+network channel ALICE/ASK@{} $1 : (string@{H}*(int@{H}*(int@{}*string@{H}[]@{H})@{})@{})@{};
+local channel MATCH: string@{H};
 
 START@{} (ignored: int@{}) {
   send(ALICE/ASK,("Bob",(27,(3,["fishing";"cats";"compilers"]))));
 }
 
-MATCH@{H} (msg: string@{H}) {
-  print("Alice says", msg);
+REPLY@{H} (msg: string@{H}) {
+  output(MATCH, msg);
 }

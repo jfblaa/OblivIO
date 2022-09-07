@@ -1,6 +1,7 @@
 BOB
 
-channel AUCTIONHOUSE/BID_BOB@{} : (int@{}*int@{H})@{};
+network channel AUCTIONHOUSE/BID_BOB@{} : (int@{}*int@{H})@{};
+local channel STDOUT: (string@{H}*int@{H})@{};
 
 var public_max_bid : int@{} = 1000;
 var secret_max_bid : int@{H} = 350;
@@ -10,7 +11,6 @@ AUCTION_STATUS@{} (status : (string@{H}*int@{})@{}) {
 }
 
 AUCTION_OVER@{} (winner : (string@{H}*int@{H})@{}) {
-    print("Auction won by", fst winner);
-    print("Winning bid was", snd winner);
+    output(STDOUT, winner);
     exit();
 }

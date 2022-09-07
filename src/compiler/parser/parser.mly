@@ -9,14 +9,14 @@
 %token <string> ID
 %token <int> INT
 %token <string> STRING
-%token VAR CHANNEL
+%token VAR CHANNEL LOCAL NETWORK
 %token SEMICOLON COMMA
 %token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK
 %token PLUS MINUS TIMES DIVIDE EQ NEQ LT LE GT GE CARET
 %token FST SND DOLLAR
-%token COLON SIZE AT PRINT EXIT 
+%token COLON SIZE AT EXIT 
 %token AND OR ASSIGN BIND IF THEN ELSE WHILE DO
-%token SKIP OBLIF SEND INPUT
+%token SKIP OBLIF SEND INPUT OUTPUT
 %token INTTYPE STRINGTYPE
 
 %left OR
@@ -24,7 +24,7 @@
 %nonassoc EQ NEQ GT LT GE LE
 %left CARET
 %left PLUS MINUS
-%left TIMES DIVIDE
+%left TIMES
 %right FST SND
 %nonassoc UMINUS
 
@@ -106,12 +106,12 @@ cmd_base:
   { OblivIfCmd{test; thn; els} }
 | WHILE test=exp DO body=cmd
   { WhileCmd{test; body} }
-| v=var BIND INPUT LPAREN size=exp RPAREN SEMICOLON
-  { InputCmd {var=v;size} }
+| var=var BIND INPUT LPAREN ch=ID COMMA size=exp RPAREN SEMICOLON
+  { InputCmd {var;ch;size} }
+| OUTPUT LPAREN ch=ID COMMA exp=exp RPAREN SEMICOLON
+  { OutputCmd{ch;exp} }
 | SEND LPAREN channel=channel COMMA exp=exp RPAREN SEMICOLON
   { SendCmd{channel;exp} }
-| PRINT LPAREN info=ioption(terminated(STRING,COMMA)) exp=exp RPAREN SEMICOLON
-  { PrintCmd{info;exp} }
 | EXIT LPAREN RPAREN SEMICOLON
   { ExitCmd }
 
@@ -154,10 +154,10 @@ potential:
 decl:
 | VAR x=ID ty=type_anno ASSIGN init=exp SEMICOLON
   { VarDecl {ty; x; init; pos=$startpos} }
-| CHANNEL channel=channel AT level=lvl potential=potential ty=type_anno SEMICOLON
-  { ChannelDecl {ty; level; channel; potential; pos=$startpos(channel)} }
-| INPUT AT level=lvl SEMICOLON
-  { InputDecl {level; pos=$startpos} }
+| NETWORK CHANNEL channel=channel AT level=lvl potential=potential ty=type_anno SEMICOLON
+  { NetworkChannelDecl {ty; level; channel; potential; pos=$startpos(channel)} }
+| LOCAL CHANNEL ch=ID ty=type_anno SEMICOLON
+  { LocalChannelDecl {ch; ty; pos=$startpos} }
 
 handler:
 | handler=ID AT level=lvl potential=potential LPAREN x=ID ty=type_anno RPAREN LBRACE body=cmd_seq RBRACE

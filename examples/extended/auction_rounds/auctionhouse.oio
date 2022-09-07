@@ -1,13 +1,13 @@
 AUCTIONHOUSE
 
-channel AUCTIONTIMER/BEGIN@{} : int@{};
-channel AUCTIONTIMER/EXIT@{} : int@{};
+network channel AUCTIONTIMER/BEGIN@{} : int@{};
+network channel AUCTIONTIMER/EXIT@{} : int@{};
 
-channel ALICE/AUCTION_STATUS@{} $1 : (string@{H}*int@{H})@{H};
-channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+network channel ALICE/AUCTION_STATUS@{} $1 : (string@{H}*int@{H})@{H};
+network channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
-channel BOB/AUCTION_STATUS@{} $1 : (string@{H}*int@{H})@{H};
-channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+network channel BOB/AUCTION_STATUS@{} $1 : (string@{H}*int@{H})@{H};
+network channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
 var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
 var round_counter : int@{} = 500;

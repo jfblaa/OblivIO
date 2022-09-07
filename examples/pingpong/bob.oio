@@ -1,8 +1,9 @@
 BOB
 
-channel ALICE/PING@{} : int@{H};
+network channel ALICE/PING@{} : int@{H};
+local channel STDOUT: int@{H};
 
 PONG@{} (x: int@{H}) {
-  print("Received", x);
+  output(STDOUT, x);
   send(ALICE/PING,x+1);
 }

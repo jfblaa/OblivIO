@@ -1,6 +1,6 @@
 BANK
 
-channel DE_LUXES_UNIQUES/RESPONSE@{} $2 : int@{H};
+network channel DE_LUXES_UNIQUES/RESPONSE@{} $2 : int@{H};
 
 var balance : int@{H}[]@{H} = [825;759;433;42;909];
 
@@ -15,7 +15,6 @@ TRANSFER@{}(msg : (int@{H}*(int@{H}*int@{H})@{})@{}) {
     to = snd snd msg;
     code = 0;
     
-    print("Balance",balance);
     oblif amount <= balance[from]
     then {
         balance[from] ?= balance[from] - amount;
@@ -24,5 +23,4 @@ TRANSFER@{}(msg : (int@{H}*(int@{H}*int@{H})@{})@{}) {
     else code ?= 200;
 
     send(DE_LUXES_UNIQUES/RESPONSE,code);
-    print("Balance",balance);
 }

@@ -13,6 +13,10 @@ and ty = Type of {base: basetype; level: L.level}
 let base (Type{base;_}) = base
 let level (Type{level;_}) = level
 
+let raiseTo (Type{base;level}) pc =
+  let level = L.lub level pc in
+  Type{base;level}
+
 let rec base_to_string = function
   | INT -> "int"
   | STRING -> "string"

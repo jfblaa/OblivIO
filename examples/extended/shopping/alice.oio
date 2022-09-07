@@ -1,6 +1,8 @@
 ALICE
 
-channel DE_LUXES_UNIQUES/ORDER@{} : (int@{H}*int@{H})@{};
+network channel DE_LUXES_UNIQUES/ORDER@{} : (int@{H}*int@{H})@{};
+local channel ACCEPTED: (string@{H}*int@{H})@{H};
+local channel ALERT: (string@{H}*int@{H})@{H};
 
 var my_id : int@{H} = 1; // Alice
 var item_id : int@{H} = 3; // Handbag
@@ -10,11 +12,9 @@ START@{} (x : int@{}) {
 }
 
 OK@{H} (item : (string@{H}*int@{H})@{H}) {
-    print("Order accepted");
-    print("Item", fst item);
-    print("Price", snd item);
+    output(ACCEPTED, item);
 }
 
 ERROR@{H} (code : int@{H}) {
-    print("Bank returned error code", code);
+    output(ALERT, ("Bank returned error code", code));
 }

@@ -47,6 +47,8 @@ rule token = parse
 | "="                 { ASSIGN }
 | "?="                { BIND }
 | "var"               { VAR }
+| "local"             { LOCAL }
+| "network"           { NETWORK }
 | "channel"           { CHANNEL }
 | "size"              { SIZE }
 | "oblif"             { OBLIF }
@@ -60,7 +62,7 @@ rule token = parse
 | "int"               { INTTYPE }
 | "string"            { STRINGTYPE }
 | "input"             { INPUT }
-| "print"             { PRINT }
+| "output"            { OUTPUT }
 | "exit"              { EXIT }
 | "//" nonnewline* '\n' { Lexing.new_line lexbuf; token lexbuf }
 | digit+ as i         { match int_of_string_opt i with

@@ -487,6 +487,10 @@ let interpCmd ctxt =
         | _ -> raise @@ InterpFatal "InputCmd"
       end;
       bitstack
+    | OutputCmd { ch; exp } ->
+      let v = eval ctxt exp in
+      if bit = 1 then print_endline @@ ch ^ "> " ^ V.to_string v;
+      bitstack
     | SendCmd { channel; exp } when ctxt.unsafe ->
       if (bit = 1) then (
         let (bitlvl,ty) = lookup ctxt.trust_map channel in
@@ -538,14 +542,6 @@ let interpCmd ctxt =
       | [] -> raise @@ InterpFatal ("PopCmd: stack empty")
       | _ :: bitstack' -> bitstack'
       end
-    | PrintCmd { info; exp } ->
-      let v = eval ctxt exp in
-      let intro =
-        match info with
-        | Some s -> s ^ ": "
-        | None -> "" in
-      if bit = 1 then print_endline @@ intro ^ V.to_string v;
-      bitstack
     | ExitCmd ->
       send ctxt (M.Goodbye {sender=ctxt.name});
       raise Exit
@@ -619,9 +615,9 @@ let interp ?(unsafe=false) print_when print_what (A.Prog{node;decls;hls}) =
     | (A.VarDecl{x;init;_}) ->
       let i = eval ctxt init in
       H.add ctxt.store x i
-    | (A.InputDecl _) ->
+    | (A.LocalChannelDecl _) ->
       ()
-    | (A.ChannelDecl{channel;ty;level;_}) ->
+    | (A.NetworkChannelDecl{channel;ty;level;_}) ->
       H.add ctxt.trust_map channel (level,ty) in
   
   List.iter f hls;

@@ -1,8 +1,8 @@
 DE_LUXES_UNIQUES
 
-channel BANK/TRANSFER@{} : (int@{H}*(int@{H}*int@{H})@{})@{};
-channel ALICE/OK@{H} : (string@{H}*int@{H})@{H};
-channel ALICE/ERROR@{H} : int@{H};
+network channel BANK/TRANSFER@{} : (int@{H}*(int@{H}*int@{H})@{})@{};
+network channel ALICE/OK@{H} : (string@{H}*int@{H})@{H};
+network channel ALICE/ERROR@{H} : int@{H};
 
 var bank_id : int@{} = 4;
 
@@ -16,9 +16,6 @@ var items : (string@{}*int@{})@{}[]@{} =
     ];
 
 var order_buf : (string@{H}*int@{H})@{H} = ("",0);
-
-var requested_item_id : int@{H} = 0;
-var customer_bank_id : int@{H} = 0;
 
 ORDER@{} (order : (int@{H}*int@{H})@{}) {
     order_buf = items[fst order];

@@ -1,8 +1,7 @@
 ALICE
 
-channel BOB/B1@{H} $6 : int@{H};
-
-channel BOB/B2@{H} : int@{H};
+network channel BOB/B1@{H} $6 : int@{H};
+network channel BOB/B2@{H} : int@{H};
 
 A1@{H} $14 (secret : int@{H}) {
     oblif secret

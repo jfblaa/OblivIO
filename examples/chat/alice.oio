@@ -1,7 +1,8 @@
 ALICE
 
-input@{H};
-channel BOB/CHAT@{}: string@{H};
+network channel BOB/CHAT@{}: string@{H};
+local channel STDIN: string@{H};
+local channel STDOUT: string@{H};
 
 var msg_out: string@{H} = "";
 
@@ -11,10 +12,10 @@ START@{} (ignored: int@{}) {
 
 CHAT@{} (msg_in: string@{H}) {
     oblif msg_in != ""
-    then print("Bob says",msg_in);
+    then output(STDOUT,"Bob says: " ^ msg_in);
     else skip;
 
-    msg_out ?= input(32);
-    send(BOB/CHAT,msg_out);
+    msg_out ?= input(STDIN, 32);
+    send(BOB/CHAT, msg_out);
     msg_out = "";
 }

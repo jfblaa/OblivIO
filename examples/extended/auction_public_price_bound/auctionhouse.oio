@@ -1,11 +1,11 @@
 AUCTIONHOUSE
 
-channel ALICE/GET_PUBLIC_MAX@{} : int@{};
-channel ALICE/AUCTION_STATUS@{} : (string@{H}*int@{})@{};
-channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+network channel ALICE/GET_PUBLIC_MAX@{} : int@{};
+network channel ALICE/AUCTION_STATUS@{} : (string@{H}*int@{})@{};
+network channel ALICE/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
-channel BOB/AUCTION_STATUS@{} : (string@{H}*int@{})@{};
-channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
+network channel BOB/AUCTION_STATUS@{} : (string@{H}*int@{})@{};
+network channel BOB/AUCTION_OVER@{} : (string@{H}*int@{H})@{H};
 
 var asking_price : int@{} = 1;
 var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
@@ -16,8 +16,6 @@ START@{} (i : int@{}) {
 }
 
 BID_ALICE@{} (reply : (int@{}*int@{H})@{}) {
-    print("asking_price", asking_price);
-    print("alice says", reply);
     if fst reply
     then {
         oblif snd reply
@@ -34,8 +32,6 @@ BID_ALICE@{} (reply : (int@{}*int@{H})@{}) {
 }
 
 BID_BOB@{} (reply : (int@{}*int@{H})@{}) {
-    print("asking_price", asking_price);
-    print("bob says", reply);
     if fst reply
     then {
         oblif snd reply

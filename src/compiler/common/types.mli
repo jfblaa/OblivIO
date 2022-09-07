@@ -13,5 +13,7 @@ and ty = Type of {base: basetype; level: L.level}
 val base: ty -> basetype
 val level: ty -> L.level
 
+val raiseTo: ty -> L.level -> ty
+
 val to_string: ty -> string
 val base_to_string: basetype -> string

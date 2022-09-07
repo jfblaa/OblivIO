@@ -1,6 +1,6 @@
 AUCTIONTIMER
 
-channel AUCTIONHOUSE/TICK@{} : int@{};
+network channel AUCTIONHOUSE/TICK@{} : int@{};
 
 var c : int@{} = 0;
 

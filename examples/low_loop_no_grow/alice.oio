@@ -1,8 +1,9 @@
 ALICE
 
-channel BOB/B2@{} : int@{H};
+network channel BOB/B2@{} : int@{H};
+local channel STDOUT: int@{H};
 
 A2@{} (secret : int@{H}) {
-    print("ALICE/A2 received", secret);
+    output(STDOUT, secret);
     send(BOB/B2, secret+1);
 }

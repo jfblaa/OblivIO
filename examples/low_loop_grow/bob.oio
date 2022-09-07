@@ -1,7 +1,8 @@
 BOB
 
-channel ALICE/A1@{} : int@{H};
-channel ALICE/A2@{} : int@{H};
+network channel ALICE/A1@{} : int@{H};
+network channel ALICE/A2@{} : int@{H};
+local channel STDOUT: int@{H};
 
 var bobs_secret : int@{H} = 0;
 
@@ -14,6 +15,6 @@ B1@{} (secret : int@{H}) {
 }
 
 B2@{} (secret : int@{H}) {
-    print("BOB/B2 received", secret);
+    output(STDOUT, secret);
     send(ALICE/A2, secret);
 }

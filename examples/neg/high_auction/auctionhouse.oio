@@ -1,10 +1,10 @@
 AUCTIONHOUSE
 
-channel ALICE/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
-channel ALICE/AUCTION_OVER@{H} : (string@{H}*int@{H})@{H};
+network channel ALICE/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+network channel ALICE/AUCTION_OVER@{H} : (string@{H}*int@{H})@{H};
 
-channel BOB/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
-channel BOB/AUCTION_OVER@{H} : (string@{H}*int@{H})@{H};
+network channel BOB/AUCTION_STATUS@{H} : (string@{H}*int@{H})@{H};
+network channel BOB/AUCTION_OVER@{H} : (string@{H}*int@{H})@{H};
 
 var winning_bid : (string@{H}*int@{H})@{H} = ("",0);
 

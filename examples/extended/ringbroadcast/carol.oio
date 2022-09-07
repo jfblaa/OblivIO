@@ -1,7 +1,8 @@
 CAROL
 
-input@{H};
-channel ALICE/RCV@{} : (string@{H}*string@{H})@{H};
+network channel ALICE/RCV@{} : (string@{H}*string@{H})@{H};
+local channel STDIN: string@{H};
+local channel STDOUT: string@{H};
 
 var my_msg : string@{H} = "";
 var msg_out : (string@{H}*string@{H})@{H} = ("","");
@@ -9,13 +10,13 @@ var msg_out : (string@{H}*string@{H})@{H} = ("","");
 RCV@{} (msg_in: (string@{H}*string@{H})@{H}) {
     oblif fst msg_in == "" || fst msg_in == "Carol"
     then {
-        my_msg ?= input(64);
+        my_msg ?= input(STDIN, 64);
         oblif my_msg != ""
         then msg_out ?= ("Carol", my_msg);
         else msg_out ?= ("","");
         my_msg ?= "";
     } else {
-        print(fst msg_in ^ ": " ^ snd msg_in);
+        output(STDOUT, fst msg_in ^ ": " ^ snd msg_in);
         msg_out ?= msg_in;
     }
     

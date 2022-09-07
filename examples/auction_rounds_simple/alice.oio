@@ -1,6 +1,8 @@
 ALICE
 
-channel AUCTIONHOUSE/ALICE_BID@{H} : int@{H};
+network channel AUCTIONHOUSE/ALICE_BID@{H} : int@{H};
+local channel WINNER_NAME: string@{H};
+local channel WINNER_BID: int@{H};
 
 var max_bid : int@{H} = 432;
 
@@ -11,10 +13,10 @@ TO_LEAD@{H} $1 (bid : int@{H}) {
 }
 
 AUCTION_OVER_NAME@{} (winner : string@{H}) {
-    print("Auction won by", winner);
+    output(WINNER_NAME, winner);
 }
 
 AUCTION_OVER_BID@{} (winning_bid : int@{H}) {
-    print("Winning bid was", winning_bid);
+    output(WINNER_BID, winning_bid);
     exit();
 }

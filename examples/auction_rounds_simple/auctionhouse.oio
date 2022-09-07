@@ -1,15 +1,15 @@
 AUCTIONHOUSE
 
-channel AUCTIONTIMER/BEGIN@{} : int@{};
-channel AUCTIONTIMER/EXIT@{} : int@{};
+network channel AUCTIONTIMER/BEGIN@{} : int@{};
+network channel AUCTIONTIMER/EXIT@{} : int@{};
 
-channel ALICE/TO_LEAD@{H} $1 : int@{H};
-channel ALICE/AUCTION_OVER_NAME@{} : string@{H};
-channel ALICE/AUCTION_OVER_BID@{} : int@{H};
+network channel ALICE/TO_LEAD@{H} $1 : int@{H};
+network channel ALICE/AUCTION_OVER_NAME@{} : string@{H};
+network channel ALICE/AUCTION_OVER_BID@{} : int@{H};
 
-channel BOB/TO_LEAD@{H} $1 : int@{H};
-channel BOB/AUCTION_OVER_NAME@{} : string@{H};
-channel BOB/AUCTION_OVER_BID@{} : int@{H};
+network channel BOB/TO_LEAD@{H} $1 : int@{H};
+network channel BOB/AUCTION_OVER_NAME@{} : string@{H};
+network channel BOB/AUCTION_OVER_BID@{} : int@{H};
 
 var winner : string@{H} = "";
 var winning_bid : int@{H} = 0;
