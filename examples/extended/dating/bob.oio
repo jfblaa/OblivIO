@@ -5,7 +5,7 @@ network channel ALICE/ASK@{} $1 : (string@{H}*(int@{H}*(int@{}*string@{H}[]@{H})
 local channel MATCH: string@{H};
 
 START@{} (ignored: int@{}) {
-  send(ALICE/ASK,("Bob",(27,(3,["fishing";"cats";"compilers"]))));
+  send(ALICE/ASK,("Bob",(27,(3,["fishing";"cats";"travelling"]))));
 }
 
 REPLY@{H} (msg: string@{H}) {
